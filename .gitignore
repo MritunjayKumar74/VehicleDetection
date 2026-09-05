@@ -1,0 +1,6 @@
+node_modules/
+.env
+backend/.env
+mongo-data/
+frontend/dist/
+.DS_Store
