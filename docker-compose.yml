@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  mongo:
+    image: mongo:7
+    container_name: vehicle_mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+  backend:
+    build: ./backend
+    container_name: vehicle_backend
+    ports:
+      - "5000:5000"
+    environment:
+      - MONGO_URI=mongodb://mongo:27017/vehicledb
+      - PORT=5000
+    depends_on:
+      - mongo
+
+  frontend:
+    build: ./frontend
+    container_name: vehicle_frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_API_URL=http://localhost:5000
+    depends_on:
+      - backend
+
+volumes:
+  mongo_data:
