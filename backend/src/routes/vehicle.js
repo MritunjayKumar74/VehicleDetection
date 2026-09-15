@@ -1,6 +1,6 @@
 const express = require('express')
 const router = express.Router()
-const { getOrRefresh } = require('../views/materializedView')
+const { getOrRefresh, getViewStats} = require('../views/materializedView')
 const { getSearchHistory, logSearch } = require('../connectors/mysql')
 
 /**
@@ -17,6 +17,19 @@ router.get('/history/recent', async (req, res) => {
   } catch (err) {
     console.error('[search history]', err)
     res.status(500).json({ error: 'Failed to fetch history' })
+  }
+})
+
+
+router.get('/dashboard/stats', async (req, res) => {
+  try {
+    const stats = await getViewStats()
+    res.json(stats)
+  } catch (err) {
+    console.error('[dashboard stats]', err)
+    res.status(500).json({
+      error: 'Failed to fetch dashboard statistics'
+    })
   }
 })
 
