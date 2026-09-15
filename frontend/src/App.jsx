@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import './App.css'
 import Dashboard from './components/Dashboard'
+import SchemaMapping from './components/SchemaMapping'
+import DatabaseEditor from './components/DatabaseEditor'
 
 function App() {
   const [plate, setPlate] = useState('')
@@ -120,6 +122,24 @@ function App() {
             <i className="fas fa-magnifying-glass"></i>
             <span>Vehicle Search</span>
           </button>
+
+          <button
+            className={`sidebar-item ${
+              activePage === 'schema' ? 'active' : ''
+            }`}
+            onClick={() => setActivePage('schema')}
+          >
+            <i className="fas fa-diagram-project"></i>
+            <span>Schema Mapping</span>
+          </button>
+
+          <button
+            className={`sidebar-item ${activePage === 'db-editor' ? 'active' : ''}`}
+            onClick={() => setActivePage('db-editor')}
+          >
+            <i className="fas fa-table"></i>
+            <span>Database Editor</span>
+          </button>
           
         </nav>
 
@@ -135,21 +155,29 @@ function App() {
             <Dashboard />
           )}
           
+          {activePage === 'schema' && (
+            <SchemaMapping />  
+          )}
+
+          {activePage === 'db-editor' && (
+            <DatabaseEditor />
+          )}
+
           {activePage === 'search' && (
             <>
 
               {/* HEADER */}
-                
+
               <header className="header">
                 <h1>Vehicle Intelligence System</h1>
                 <p>
                   Federated lookup across 5 independent databases
                 </p>
               </header>
-                
-                
+
+
               {/* SEARCH */}
-                
+
               <form
                 className="search-box"
                 onSubmit={handleSearch}
@@ -163,7 +191,7 @@ function App() {
                   }
                   disabled={loading}
                 />
-      
+
                 <button
                   type="submit"
                   disabled={loading || !plate.trim()}
@@ -176,7 +204,7 @@ function App() {
               {/* =========================
                   RECENT SEARCHES
               ========================= */}
-      
+
               {history.length > 0 && (
                 <div className="history-section">
                 
@@ -217,30 +245,30 @@ function App() {
                         </span>
                           
                       </div>
-      
+
                     ))}
-      
+
                   </div>
                   
                 </div>
               )}
-      
+
             
               {/* =========================
                   ERROR
               ========================= */}
-      
+
               {error && (
                 <div className="error-box">
                   {error}
                 </div>
               )}
-      
+
             
               {/* =========================
                   RESULTS
               ========================= */}
-      
+
               {result && (
                 <div className="results">
                 
@@ -275,14 +303,14 @@ function App() {
                         Total latency: {result.meta.total_latency}
                       </small>
                     )}
-      
+
                   </div>
                   
                   
                   {/* =========================
                       DATABASE CARDS
                   ========================= */}
-      
+
                   <div className="grid">
                   
                     {/* REGISTRATION */}
@@ -325,15 +353,15 @@ function App() {
                           </li>
                       
                         </ul>
-      
+
                       ) : (
                       
                         <p className="muted">
                           No registration found
                         </p>
-      
+
                       )}
-      
+
                     </div>
                     
                     
@@ -376,15 +404,15 @@ function App() {
                           </li>
                       
                         </ul>
-      
+
                       ) : (
                       
                         <p className="muted">
                           No insurance record (Uninsured)
                         </p>
-      
+
                       )}
-      
+
                     </div>
                     
                     
@@ -429,15 +457,15 @@ function App() {
                           </li>
                           
                         </ul>
-      
+
                       ) : (
                       
                         <p className="muted">
                           No recent sighting
                         </p>
-      
+
                       )}
-      
+
                     </div>
                     
                     
@@ -477,15 +505,15 @@ function App() {
                           </li>
                           
                         </ul>
-      
+
                       ) : (
                       
                         <p className="muted">
                           No theft record
                         </p>
-      
+
                       )}
-      
+
                     </div>
                     
                     
@@ -527,15 +555,15 @@ function App() {
                           </li>
                           
                         </ul>
-      
+
                       ) : (
                       
                         <p className="muted">
                           No MOT report
                         </p>
-      
+
                       )}
-      
+
                     </div>
                     
                   </div>
@@ -544,7 +572,7 @@ function App() {
                   {/* =========================
                       SOURCE BREAKDOWN
                   ========================= */}
-      
+
                   {result.meta?.source_latencies && (
                   
                     <div className="sources">
@@ -579,16 +607,16 @@ function App() {
                               </span>
                                 
                             </div>
-      
+
                           )
                         )}
-      
+
                       </div>
                       
                     </div>
-      
+
                   )}
-      
+
                 </div>
               )}
           </>

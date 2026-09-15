@@ -7,7 +7,7 @@ const vehicleRoutes = require('./routes/vehicle')
 const { connectMongo } = require('./connectors/mongo')
 const { connectPostgres } = require('./connectors/postgres')
 const { connectMySQL } = require('./connectors/mysql')
-
+const schemaRoutes = require('./routes/schema')
 const app = express()
 app.use(cors())
 app.use(express.json())
@@ -17,6 +17,8 @@ app.get('/', (req, res) => {
 })
 
 app.use('/api/vehicle', vehicleRoutes)
+app.use('/api/schema', schemaRoutes)
+app.use('/api/db', require('./routes/dbEditor'))
 
 const PORT = process.env.PORT || 5000
 const MONGO_URI = process.env.MONGO_URI

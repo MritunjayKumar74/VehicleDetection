@@ -1,0 +1,110 @@
+/* Schema Mapping — matches dashboard design tokens */
+
+.schema-view {
+  width: 100%;
+}
+
+.schema-view > h2 {
+  margin: 0 0 6px;
+  color: #111827;
+  font-size: 22px;
+}
+
+.schema-view > p.muted {
+  margin: 0 0 24px;
+}
+
+.muted {
+  color: #6b7280;
+  font-size: 13px;
+}
+
+/* Source cards */
+.schema-view .card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 22px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.04);
+  margin-bottom: 18px;
+}
+
+.schema-view .card h3 {
+  margin: 0 0 4px;
+  color: #111827;
+  font-size: 16px;
+}
+
+.schema-view .card > p.muted {
+  margin: 0 0 14px;
+}
+
+.schema-view .card > p {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: #374151;
+}
+
+.schema-view .card > p strong {
+  color: #111827;
+  font-weight: 600;
+}
+
+/* Field mapping table */
+.schema-view table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.schema-view table thead th {
+  text-align: left;
+  padding: 10px 14px;
+  background: #f9fafb;
+  color: #6b7280;
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.schema-view table tbody td {
+  padding: 10px 14px;
+  color: #111827;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.schema-view table tbody tr:nth-child(even) {
+  background: #fafafa;
+}
+
+.schema-view table tbody tr:hover {
+  background: #f3f4f6;
+}
+
+.schema-view table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* Match type badge */
+.badge-small {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #4338ca;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+/* Error box (shared) */
+.error-box {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+}
