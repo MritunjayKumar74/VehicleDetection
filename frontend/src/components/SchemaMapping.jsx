@@ -5,7 +5,7 @@ function SchemaMapping() {
   const [error, setError] = useState(null)
 
   useEffect(() => {
-    fetch('http://localhost:5000/api/schema/mapping')
+    fetch(`${import.meta.env.VITE_API_URL}/api/schema/mapping`)
       .then(res => res.json())
       .then(setRegistry)
       .catch(err => setError(err.message))

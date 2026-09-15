@@ -9,7 +9,7 @@ const SOURCES = [
   'DB5_MotReports',
 ]
 
-const API = 'http://localhost:5000/api/db'
+const API = `${import.meta.env.VITE_API_URL}/api/db`
 const POLL_INTERVAL = 5000
 
 function DatabaseEditor() {

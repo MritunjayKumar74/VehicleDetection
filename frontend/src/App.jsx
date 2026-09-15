@@ -15,7 +15,7 @@ function App() {
   const fetchHistory = async () => {
     try {
       const res = await fetch(
-        'http://localhost:5000/api/vehicle/history/recent?limit=10'
+        `${import.meta.env.VITE_API_URL}/api/vehicle/history/recent?limit=10`
       )
 
       const data = await res.json()
@@ -40,7 +40,7 @@ function App() {
 
     try {
       const res = await fetch(
-        `http://localhost:5000/api/vehicle/${plate.trim().toUpperCase()}`
+        `${import.meta.env.VITE_API_URL}/api/vehicle/${plate.trim().toUpperCase()}`
       )
 
       const data = await res.json()
