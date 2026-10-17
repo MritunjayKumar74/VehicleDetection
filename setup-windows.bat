@@ -17,7 +17,7 @@ netsh interface portproxy add v4tov4 listenport=5000 listenaddress=0.0.0.0 conne
 
 :: Start Docker containers in WSL
 echo Starting Docker containers...
-wsl -e bash -c "cd ~/\"IIA Projects\"/vehicle-detection && ./docker.sh up &"
+wsl -e bash -c "cd /mnt/c/Users/hp/OneDrive/Desktop/VehicleDetection && ./docker.sh up &"
 
 echo.
 echo Done! Open your browser and go to:
