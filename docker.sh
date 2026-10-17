@@ -3,31 +3,31 @@
 case "$1" in
 
   up)
-    docker-compose up 2>&1 | grep -v "vehicle_mongo"
+    docker compose up 2>&1 | grep -v "vehicle_mongo"
     ;;
 
   down)
-    docker-compose down
+    docker compose down
     ;;
 
   frontend)
     echo "Building frontend..."
-    docker-compose build --no-cache frontend
-    docker-compose up -d frontend
+    docker compose build --no-cache frontend
+    docker compose up -d frontend
     echo "Frontend rebuilt and restarted."
     ;;
 
   backend)
     echo "Building backend..."
-    docker-compose build --no-cache backend
-    docker-compose up -d backend
+    docker compose build --no-cache backend
+    docker compose up -d backend
     echo "Backend rebuilt and restarted."
     ;;
 
   build)
     echo "Building all services..."
-    docker-compose build --no-cache
-    docker-compose up 2>&1 | grep -v "vehicle_mongo"
+    docker compose build --no-cache
+    docker compose up 2>&1 | grep -v "vehicle_mongo"
     ;;
 
   seed)
@@ -35,13 +35,13 @@ case "$1" in
     ;;
 
   logs)
-    docker-compose logs -f
+    docker compose logs -f
     ;;
 
   restart)
-    docker-compose down
-    docker-compose build --no-cache
-    docker-compose up 2>&1 | grep -v "vehicle_mongo"
+    docker compose down
+    docker compose build --no-cache
+    docker compose up 2>&1 | grep -v "vehicle_mongo"
     ;;
 
   *)
