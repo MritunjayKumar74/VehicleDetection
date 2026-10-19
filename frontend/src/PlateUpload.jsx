@@ -51,7 +51,9 @@ export default function PlateUpload() {
       {result && (
         <h3>
           Plate: {result.plate || 'Not detected'} <br />
-          <small>Confidence: {Math.round(result.confidence)}%</small>
+          {result.confidence > 0 && (
+            <small>Confidence: {Math.round(result.confidence)}%</small>
+        )}
         </h3>
       )}
       {error && <p style={{ color: 'red' }}>{error}</p>}
