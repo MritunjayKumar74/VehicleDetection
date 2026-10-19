@@ -1,6 +1,8 @@
 node_modules/
+backend/uploads/
 .env
 backend/.env
 mongo-data/
 frontend/dist/
 .DS_Store
+*.traineddata
