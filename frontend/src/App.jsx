@@ -3,6 +3,7 @@ import './App.css'
 import Dashboard from './components/Dashboard'
 import SchemaMapping from './components/SchemaMapping'
 import DatabaseEditor from './components/DatabaseEditor'
+import PlateUpload from './PlateUpload';
 
 function App() {
   const [plate, setPlate] = useState('')
@@ -151,6 +152,8 @@ function App() {
       ========================= */}
 
       <main className="main-content">
+          <PlateUpload />
+
           {activePage === 'dashboard' && (
             <Dashboard />
           )}

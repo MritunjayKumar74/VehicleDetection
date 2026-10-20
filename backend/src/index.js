@@ -19,11 +19,14 @@ app.get('/', (req, res) => {
 app.use('/api/vehicle', vehicleRoutes)
 app.use('/api/schema', schemaRoutes)
 app.use('/api/db', require('./routes/dbEditor'))
+app.use('/api/ocr', require('./routes/ocr'));
 
 const PORT = process.env.PORT || 5000
 const MONGO_URI = process.env.MONGO_URI
 
 async function start() {
+  app.listen(PORT, () => console.log(`Server running on port ${PORT}`))
+
   try {
     await mongoose.connect(MONGO_URI)
     console.log('Connected to MongoDB (default)')
@@ -31,11 +34,8 @@ async function start() {
     await connectMongo()
     await connectPostgres()
     await connectMySQL()
-
-    app.listen(PORT, () => console.log(`Server running on port ${PORT}`))
   } catch (err) {
-    console.error('Startup error:', err)
-    process.exit(1)
+    console.error('Database connection failed (OCR still works):', err.message)
   }
 }
 
