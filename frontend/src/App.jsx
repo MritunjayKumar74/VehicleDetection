@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import './App.css'
 import Dashboard from './components/Dashboard'
 import SchemaMapping from './components/SchemaMapping'
 import DatabaseEditor from './components/DatabaseEditor'
+import SqlConsole from './components/SqlConsole'
 import PlateUpload from './PlateUpload';
 
 function App() {
@@ -10,53 +11,56 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
-  const [history, setHistory] = useState([])
+  const [candidates, setCandidates] = useState([])
+  const [matching, setMatching] = useState(false)
+  const [make, setMake] = useState('')
+  const [model, setModel] = useState('')
+  const [color, setColor] = useState('')
+  const [algorithm, setAlgorithm] = useState(null)
   const [activePage, setActivePage] = useState('dashboard')
 
-  const fetchHistory = async () => {
-    try {
-      const res = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/vehicle/history/recent?limit=10`
-      )
-
-      const data = await res.json()
-      setHistory(data.history || [])
-    } catch (err) {
-      console.error('Failed to load history', err)
-    }
-  }
-
-  useEffect(() => {
-    fetchHistory()
-  }, [])
-
-  const handleSearch = async (e) => {
-    e.preventDefault()
-
-    if (!plate.trim()) return
+  const runSearch = async (searchPlate = plate) => {
+    const queryPlate = searchPlate.trim().toUpperCase()
+    if (!queryPlate) return
 
     setLoading(true)
+    setMatching(true)
     setError(null)
     setResult(null)
+    setCandidates([])
 
     try {
-      const res = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/vehicle/${plate.trim().toUpperCase()}`
-      )
+      const candidateQuery = new URLSearchParams({ plate: queryPlate })
+      if (make.trim()) candidateQuery.set('make', make.trim())
+      if (model.trim()) candidateQuery.set('model', model.trim())
+      if (color.trim()) candidateQuery.set('color', color.trim())
 
-      const data = await res.json()
+      const [lookupResponse, matchesResponse] = await Promise.all([
+        fetch(`${import.meta.env.VITE_API_URL}/api/vehicle/${encodeURIComponent(queryPlate)}`),
+        fetch(`${import.meta.env.VITE_API_URL}/api/vehicle/matches?${candidateQuery.toString()}`),
+      ])
+      const [lookupData, matchesData] = await Promise.all([
+        lookupResponse.json(),
+        matchesResponse.json(),
+      ])
 
-      if (!res.ok) {
-        throw new Error(data.error || 'Lookup failed')
-      }
+      if (!lookupResponse.ok) throw new Error(lookupData.error || 'Lookup failed')
+      if (!matchesResponse.ok) throw new Error(matchesData.error || 'Candidate matching failed')
 
-      setResult(data)
+      setResult(lookupData)
+      setCandidates(matchesData.candidates || [])
+      setAlgorithm(matchesData.algorithm || null)
     } catch (err) {
       setError(err.message)
     } finally {
       setLoading(false)
-      await fetchHistory()
+      setMatching(false)
     }
+  }
+
+  const handleSearch = (e) => {
+    e.preventDefault()
+    runSearch()
   }
 
   const getStatusColor = (status) => {
@@ -150,6 +154,14 @@ function App() {
             <i className="fas fa-table"></i>
             <span>Database Editor</span>
           </button>
+
+          <button
+            className={`sidebar-item ${activePage === 'sql-console' ? 'active' : ''}`}
+            onClick={() => setActivePage('sql-console')}
+          >
+            <i className="fas fa-terminal"></i>
+            <span>SQL Console</span>
+          </button>
           
         </nav>
 
@@ -175,6 +187,8 @@ function App() {
             <DatabaseEditor />
           )}
 
+          {activePage === 'sql-console' && <SqlConsole />}
+
           {activePage === 'search' && (
             <>
 
@@ -183,7 +197,7 @@ function App() {
               <header className="header">
                 <h1>Vehicle Intelligence System</h1>
                 <p>
-                  Federated lookup across 5 independent databases
+                  Federated lookup and close plate matching across 5 databases
                 </p>
               </header>
 
@@ -201,68 +215,66 @@ function App() {
                   onChange={(e) =>
                     setPlate(e.target.value.toUpperCase())
                   }
-                  disabled={loading}
+                  disabled={loading || matching}
                 />
 
                 <button
                   type="submit"
-                  disabled={loading || !plate.trim()}
+                  disabled={loading || matching || !plate.trim()}
                 >
-                  {loading ? 'Searching...' : 'Search'}
+                  {loading || matching ? 'Searching...' : 'Search'}
                 </button>
-              </form>
-                
-                
-              {/* =========================
-                  RECENT SEARCHES
-              ========================= */}
-
-              {history.length > 0 && (
-                <div className="history-section">
-                
-                  <h2>Recent Searches</h2>
-              
-                  <div className="history-list">
-              
-                    {history.map((h, index) => (
-                    
-                      <div
-                        className="history-item"
-                        key={`${h.plate}-${h.searched_at}-${index}`}
-                      >
-                      
-                        <div className="history-info">
-                    
-                          <span className="history-plate">
-                            {h.plate}
-                          </span>
-                    
-                          <span className="history-time">
-                            {new Date(
-                              h.searched_at
-                            ).toLocaleTimeString([], {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </span>
-                          
-                        </div>
-                          
-                        <span
-                          className={`history-status ${h.overall_status
-                            ?.toLowerCase()
-                            .replace(/\s+/g, '-')}`}
-                        >
-                          {h.overall_status}
-                        </span>
-                          
-                      </div>
-
-                    ))}
-
-                  </div>
-                  
+                <div className="search-context-fields">
+                  <input aria-label="Vehicle make clue" placeholder="Make (optional)" value={make} onChange={e => setMake(e.target.value)} />
+                  <input aria-label="Vehicle model clue" placeholder="Model (optional)" value={model} onChange={e => setModel(e.target.value)} />
+                  <input aria-label="Vehicle color clue" placeholder="Color (optional)" value={color} onChange={e => setColor(e.target.value)} />
                 </div>
+              </form>
+
+              {algorithm && (
+                <details className="ocr-algorithm">
+                  <summary>How close plate matches are ranked</summary>
+                  <p><strong>{algorithm.name}.</strong> {algorithm.plateRules} {algorithm.candidateGate} {algorithm.ranking}</p>
+                </details>
+              )}
+
+              {matching && <p className="muted">Finding close plate matches…</p>}
+              {result && !matching && candidates.length === 0 && (
+                <p className="muted">No close plate matches found. Check the plate or add make, model, or color clues.</p>
+              )}
+
+              {candidates.length > 0 && (
+                <section className="ocr-candidates">
+                  <div className="ocr-section-heading">
+                    <div>
+                      <h2>Close plate matches</h2>
+                      <p>Review candidates and open the correct vehicle record.</p>
+                    </div>
+                    <span>{candidates.length} candidates</span>
+                  </div>
+                  <div className="ocr-candidate-list">
+                    {candidates.map(candidate => (
+                      <div className="ocr-candidate" key={candidate.plate}>
+                        <span className="ocr-candidate-topline">
+                          <strong>{candidate.plate}</strong>
+                          <span>{candidate.score}% rank score</span>
+                        </span>
+                        <span className="ocr-candidate-details">
+                          Plate similarity {candidate.plateSimilarity}% · Levenshtein distance {candidate.plateDistance}
+                        </span>
+                        <span className="ocr-candidate-details">
+                          {[candidate.registration?.make, candidate.registration?.model, candidate.registration?.year, candidate.camera?.color].filter(Boolean).join(' | ') || 'No vehicle context recorded'}
+                        </span>
+                        <span className="ocr-source-list">
+                          {candidate.sourceRecords.map(source => <span key={source}>{source.replace(/^DB\d_/, '').replace(/([A-Z])/g, ' $1').trim()}</span>)}
+                        </span>
+                        <button type="button" onClick={() => { setPlate(candidate.plate); runSearch(candidate.plate) }}>
+                          Open this vehicle
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </section>
               )}
 
             

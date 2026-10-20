@@ -46,10 +46,10 @@ router.get('/matches', async (req, res) => {
     res.json({
       candidates,
       algorithm: {
-        name: 'OCR-aware weighted Damerau-Levenshtein (adjacent transpositions) + contextual ranking',
-        plateRules: 'O/0, I/1, B/8, S/5, Z/2 and G/6 substitutions cost 0.25; adjacent transpositions cost 0.65; other edits cost 1.',
-        candidateGate: 'At most 2 weighted edits and at least 70% plate similarity.',
-        ranking: 'Plate similarity receives 70% when a candidate has usable context; available make, model and color clues split the remaining 30% proportionally. Missing data is ignored. Without usable context, ranking uses plate similarity only.',
+        name: 'Normalization + exact matching + Levenshtein distance + Jaro-Winkler similarity, with contextual Levenshtein comparisons',
+        plateRules: 'Plate similarity is the average of normalized Levenshtein similarity and Jaro-Winkler similarity. Exact normalized equality has distance 0 and similarity 100%.',
+        candidateGate: 'Candidates must have Levenshtein distance at most 2 and combined plate similarity of at least 70%.',
+        ranking: 'Combined plate similarity receives 70% when context is available; make, model, and color are compared using normalized Levenshtein similarity and share the remaining 30%. Missing context is ignored.',
       },
     })
   } catch (err) {

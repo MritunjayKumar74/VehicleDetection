@@ -34,8 +34,9 @@ body {
 
 .search-box {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.75rem;
-  max-width: 560px;
+  max-width: 760px;
   margin: 0 auto 2rem;
 }
 
@@ -71,6 +72,37 @@ body {
 .search-box button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.search-context-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  flex-basis: 100%;
+}
+
+.search-context-fields input {
+  min-width: 0;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+}
+
+.ocr-candidate > button {
+  justify-self: start;
+  padding: 0.55rem 0.85rem;
+  border: 0;
+  border-radius: 7px;
+  background: #2563eb;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+@media (max-width: 640px) {
+  .search-context-fields {
+    grid-template-columns: 1fr;
+  }
 }
 
 .error-box {

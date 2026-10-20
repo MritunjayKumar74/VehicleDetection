@@ -18,15 +18,6 @@ function normalizePlate(value) {
   return String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '')
 }
 
-function isOcrConfusion(a, b) {
-  return new Set([a, b]).has('O') && new Set([a, b]).has('0') ||
-    new Set([a, b]).has('I') && new Set([a, b]).has('1') ||
-    new Set([a, b]).has('B') && new Set([a, b]).has('8') ||
-    new Set([a, b]).has('S') && new Set([a, b]).has('5') ||
-    new Set([a, b]).has('Z') && new Set([a, b]).has('2') ||
-    new Set([a, b]).has('G') && new Set([a, b]).has('6')
-}
-
 function plateDistance(left, right) {
   const a = normalizePlate(left)
   const b = normalizePlate(right)
@@ -36,20 +27,58 @@ function plateDistance(left, right) {
 
   for (let i = 1; i <= a.length; i += 1) {
     for (let j = 1; j <= b.length; j += 1) {
-      const substitution = a[i - 1] === b[j - 1]
-        ? 0
-        : isOcrConfusion(a[i - 1], b[j - 1]) ? 0.25 : 1
       rows[i][j] = Math.min(
         rows[i - 1][j] + 1,
         rows[i][j - 1] + 1,
-        rows[i - 1][j - 1] + substitution
+        rows[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)
       )
-      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
-        rows[i][j] = Math.min(rows[i][j], rows[i - 2][j - 2] + 0.65)
-      }
     }
   }
   return rows[a.length][b.length]
+}
+
+function jaroWinkler(left, right) {
+  const a = normalizePlate(left)
+  const b = normalizePlate(right)
+  if (!a || !b) return 0
+  if (a === b) return 1
+
+  const matchDistance = Math.max(0, Math.floor(Math.max(a.length, b.length) / 2) - 1)
+  const aMatches = Array(a.length).fill(false)
+  const bMatches = Array(b.length).fill(false)
+  let matches = 0
+
+  for (let i = 0; i < a.length; i += 1) {
+    const start = Math.max(0, i - matchDistance)
+    const end = Math.min(i + matchDistance + 1, b.length)
+    for (let j = start; j < end; j += 1) {
+      if (bMatches[j] || a[i] !== b[j]) continue
+      aMatches[i] = true
+      bMatches[j] = true
+      matches += 1
+      break
+    }
+  }
+  if (!matches) return 0
+
+  const matchedA = a.split('').filter((_, index) => aMatches[index])
+  const matchedB = b.split('').filter((_, index) => bMatches[index])
+  let transpositions = 0
+  for (let i = 0; i < matchedA.length; i += 1) {
+    if (matchedA[i] !== matchedB[i]) transpositions += 1
+  }
+  transpositions /= 2
+
+  const jaro = (
+    matches / a.length +
+    matches / b.length +
+    (matches - transpositions) / matches
+  ) / 3
+  let prefixLength = 0
+  while (prefixLength < Math.min(4, a.length, b.length) && a[prefixLength] === b[prefixLength]) {
+    prefixLength += 1
+  }
+  return jaro + prefixLength * 0.1 * (1 - jaro)
 }
 
 function textSimilarity(left, right) {
@@ -146,7 +175,9 @@ async function findPlateCandidates({ plate, make, model, color }) {
   return [...byPlate.values()]
     .map(candidate => {
       const distance = plateDistance(normalizedInput, candidate.plate)
-      const plateScore = Math.max(0, 1 - distance / Math.max(normalizedInput.length, normalizePlate(candidate.plate).length))
+      const levenshteinSimilarity = Math.max(0, 1 - distance / Math.max(normalizedInput.length, normalizePlate(candidate.plate).length))
+      const jaroWinklerSimilarity = jaroWinkler(normalizedInput, candidate.plate)
+      const plateScore = (levenshteinSimilarity + jaroWinklerSimilarity) / 2
       const contextMatches = context.map(item => {
         const value = item.get(candidate)
         const similarity = textSimilarity(item.value, value)
@@ -172,7 +203,9 @@ async function findPlateCandidates({ plate, make, model, color }) {
         plate: candidate.plate,
         score: Math.round(score * 100),
         plateSimilarity: Math.round(plateScore * 100),
-        plateDistance: Number(distance.toFixed(2)),
+        plateDistance: distance,
+        levenshteinSimilarity: Math.round(levenshteinSimilarity * 100),
+        jaroWinklerSimilarity: Math.round(jaroWinklerSimilarity * 100),
         contextMatches,
         registration: candidate.registration && {
           make: candidate.registration.vehicle_make,

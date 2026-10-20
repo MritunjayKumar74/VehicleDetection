@@ -7,11 +7,12 @@ const { insurancePool, motPool }  = require('../connectors/postgres')
 const { getRtoPool }              = require('../connectors/mysql')
 const { SCHEMA_REGISTRY }         = require('../mediator/schemaRegistry')
 const { markStale }               = require('../views/materializedView')
+const { previewSql, commitSql } = require('../services/dbSqlCompiler')
 
 const CameraSightingSchema = require('../models/CameraSighting').schema
 const TheftRecord          = require('../models/TheftRecord')
 
-// â”€â”€ Source config â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+//  Source config â”€
 function getSourceConfig(source) {
   const configs = {
     DB1_CameraSightings: {
@@ -49,12 +50,12 @@ function getSourceConfig(source) {
   return configs[source] || null
 }
 
-// â”€â”€ Helper: get the local field name that maps to the global "plate" field â”€â”€
+//  Helper: get the local field name that maps to the global "plate" field s
 function getPlateField(source) {
   return SCHEMA_REGISTRY.sources[source]?.joinKey?.localField
 }
 
-// â”€â”€ Helper: invalidate the materialized view for a given record â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+//  Helper: invalidate the materialized view for a given record â”€
 function invalidatePlate(source, record, reason) {
   if (!record) return
   const plateField = getPlateField(source)
@@ -66,11 +67,34 @@ function invalidatePlate(source, record, reason) {
   )
 }
 
-// â”€â”€ GET /api/db/:source â€” fetch all records â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+//  GET /api/db/:source â€” fetch all records â”€
 function invalidatePlateChange(source, previousRecord, updatedRecord) {
   invalidatePlate(source, previousRecord, 'record_updated_old_plate')
   invalidatePlate(source, updatedRecord, 'record_updated_new_plate')
 }
+
+// Parse and preview a restricted SQL mutation without changing database data.
+router.post('/sql/preview', async (req, res) => {
+  try {
+    const preview = await previewSql(req.body?.sql, {
+      acceptedPlate: req.body?.acceptedPlate,
+      ignoreSuggestions: req.body?.ignoreSuggestions === true,
+    })
+    res.json(preview)
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message || 'SQL preview failed' })
+  }
+})
+
+// Execute only a previously previewed plan after explicit user confirmation.
+router.post('/sql/commit', async (req, res) => {
+  try {
+    const result = await commitSql(req.body?.previewId)
+    res.json(result)
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message || 'SQL command failed' })
+  }
+})
 router.get('/:source', async (req, res) => {
   const config = getSourceConfig(req.params.source)
   if (!config) return res.status(404).json({ error: 'Unknown source' })
@@ -96,7 +120,7 @@ router.get('/:source', async (req, res) => {
   }
 })
 
-// â”€â”€ POST /api/db/:source â€” insert a record â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+//  POST /api/db/:source â€” insert a record 
 router.post('/:source', async (req, res) => {
   const config = getSourceConfig(req.params.source)
   if (!config) return res.status(404).json({ error: 'Unknown source' })
@@ -138,7 +162,7 @@ router.post('/:source', async (req, res) => {
   }
 })
 
-// â”€â”€ PUT /api/db/:source/:id â€” edit a record â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+//  PUT /api/db/:source/:id â€” edit a record â”€
 router.put('/:source/:id', async (req, res) => {
   const config = getSourceConfig(req.params.source)
   if (!config) return res.status(404).json({ error: 'Unknown source' })
@@ -193,7 +217,7 @@ router.put('/:source/:id', async (req, res) => {
   }
 })
 
-// â”€â”€ DELETE /api/db/:source/:id â€” delete a record â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+//  DELETE /api/db/:source/:id â€” delete a record â”€
 router.delete('/:source/:id', async (req, res) => {
   const config = getSourceConfig(req.params.source)
   if (!config) return res.status(404).json({ error: 'Unknown source' })

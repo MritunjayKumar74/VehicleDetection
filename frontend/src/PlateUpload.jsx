@@ -227,7 +227,7 @@ export default function PlateUpload() {
                   <span>{candidate.score}% rank score</span>
                 </span>
                 <span className="ocr-candidate-details">
-                  Plate similarity {candidate.plateSimilarity}% - weighted edits {candidate.plateDistance}
+                  Plate similarity {candidate.plateSimilarity}% - Levenshtein distance {candidate.plateDistance}
                 </span>
                 <span className="ocr-candidate-details">
                   {[candidate.registration?.make, candidate.registration?.model, candidate.registration?.year, candidate.camera?.color].filter(Boolean).join(' | ') || 'No vehicle context recorded'}
