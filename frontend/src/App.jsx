@@ -126,6 +126,15 @@ function App() {
 
           <button
             className={`sidebar-item ${
+              activePage === 'ocr' ? 'active' : ''
+            }`}
+            onClick={() => setActivePage('ocr')}
+          >
+            <i className="fas fa-camera"></i>
+            <span>Image OCR</span>
+          </button>
+          <button
+            className={`sidebar-item ${
               activePage === 'schema' ? 'active' : ''
             }`}
             onClick={() => setActivePage('schema')}
@@ -152,12 +161,12 @@ function App() {
       ========================= */}
 
       <main className="main-content">
-          <PlateUpload />
-
           {activePage === 'dashboard' && (
             <Dashboard />
           )}
           
+          {activePage === 'ocr' && <PlateUpload />}
+
           {activePage === 'schema' && (
             <SchemaMapping />  
           )}

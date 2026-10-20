@@ -1,4 +1,4 @@
-// routes/dbEditor.js
+﻿// routes/dbEditor.js
 const express = require('express')
 const router  = express.Router()
 
@@ -11,7 +11,7 @@ const { markStale }               = require('../views/materializedView')
 const CameraSightingSchema = require('../models/CameraSighting').schema
 const TheftRecord          = require('../models/TheftRecord')
 
-// ── Source config ─────────────────────────────────────────────
+// â”€â”€ Source config â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function getSourceConfig(source) {
   const configs = {
     DB1_CameraSightings: {
@@ -49,12 +49,12 @@ function getSourceConfig(source) {
   return configs[source] || null
 }
 
-// ── Helper: get the local field name that maps to the global "plate" field ──
+// â”€â”€ Helper: get the local field name that maps to the global "plate" field â”€â”€
 function getPlateField(source) {
   return SCHEMA_REGISTRY.sources[source]?.joinKey?.localField
 }
 
-// ── Helper: invalidate the materialized view for a given record ─────────────
+// â”€â”€ Helper: invalidate the materialized view for a given record â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function invalidatePlate(source, record, reason) {
   if (!record) return
   const plateField = getPlateField(source)
@@ -66,7 +66,11 @@ function invalidatePlate(source, record, reason) {
   )
 }
 
-// ── GET /api/db/:source — fetch all records ───────────────────
+// â”€â”€ GET /api/db/:source â€” fetch all records â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function invalidatePlateChange(source, previousRecord, updatedRecord) {
+  invalidatePlate(source, previousRecord, 'record_updated_old_plate')
+  invalidatePlate(source, updatedRecord, 'record_updated_new_plate')
+}
 router.get('/:source', async (req, res) => {
   const config = getSourceConfig(req.params.source)
   if (!config) return res.status(404).json({ error: 'Unknown source' })
@@ -92,7 +96,7 @@ router.get('/:source', async (req, res) => {
   }
 })
 
-// ── POST /api/db/:source — insert a record ────────────────────
+// â”€â”€ POST /api/db/:source â€” insert a record â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.post('/:source', async (req, res) => {
   const config = getSourceConfig(req.params.source)
   if (!config) return res.status(404).json({ error: 'Unknown source' })
@@ -134,7 +138,7 @@ router.post('/:source', async (req, res) => {
   }
 })
 
-// ── PUT /api/db/:source/:id — edit a record ───────────────────
+// â”€â”€ PUT /api/db/:source/:id â€” edit a record â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.put('/:source/:id', async (req, res) => {
   const config = getSourceConfig(req.params.source)
   if (!config) return res.status(404).json({ error: 'Unknown source' })
@@ -142,17 +146,19 @@ router.put('/:source/:id', async (req, res) => {
   try {
     if (config.type === 'mongo') {
       const Model = config.getModel()
+      const previous = await Model.findById(req.params.id).lean()
       const doc = await Model.findByIdAndUpdate(
         req.params.id,
         { $set: req.body },
         { new: true }
       ).lean()
       if (!doc) return res.status(404).json({ error: 'Record not found' })
-      invalidatePlate(req.params.source, doc, 'record_updated')
+      invalidatePlateChange(req.params.source, previous, doc)
       return res.json(doc)
     }
 
     if (config.type === 'postgres') {
+      const { rows: previousRows } = await config.pool.query(`SELECT * FROM ${config.table} WHERE ${config.idField} = $1`, [req.params.id])
       const fields = Object.keys(req.body)
       const values = Object.values(req.body)
       const setClause = fields.map((f, i) => `${f} = $${i + 1}`).join(', ')
@@ -161,11 +167,15 @@ router.put('/:source/:id', async (req, res) => {
         [...values, req.params.id]
       )
       if (!rows.length) return res.status(404).json({ error: 'Record not found' })
-      invalidatePlate(req.params.source, rows[0], 'record_updated')
+      invalidatePlateChange(req.params.source, previousRows[0], rows[0])
       return res.json(rows[0])
     }
 
     if (config.type === 'mysql') {
+      const [previousRows] = await getRtoPool().query(
+        `SELECT * FROM ${config.table} WHERE ${config.idField} = ?`,
+        [req.params.id]
+      )
       await getRtoPool().query(
         `UPDATE ${config.table} SET ? WHERE ${config.idField} = ?`,
         [req.body, req.params.id]
@@ -175,7 +185,7 @@ router.put('/:source/:id', async (req, res) => {
         [req.params.id]
       )
       if (!rows.length) return res.status(404).json({ error: 'Record not found' })
-      invalidatePlate(req.params.source, rows[0], 'record_updated')
+      invalidatePlateChange(req.params.source, previousRows[0], rows[0])
       return res.json(rows[0])
     }
   } catch (err) {
@@ -183,7 +193,7 @@ router.put('/:source/:id', async (req, res) => {
   }
 })
 
-// ── DELETE /api/db/:source/:id — delete a record ─────────────
+// â”€â”€ DELETE /api/db/:source/:id â€” delete a record â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.delete('/:source/:id', async (req, res) => {
   const config = getSourceConfig(req.params.source)
   if (!config) return res.status(404).json({ error: 'Unknown source' })
@@ -226,3 +236,4 @@ router.delete('/:source/:id', async (req, res) => {
 })
 
 module.exports = router
+
