@@ -475,9 +475,9 @@ function App() {
                       
                           <li>
                             <strong>Time:</strong>{' '}
-                            {new Date(
-                              result.profile.sighted_when
-                            ).toLocaleString()}
+                            {result.profile.sighted_when
+                              ? new Date(result.profile.sighted_when).toLocaleString()
+                              : 'Not recorded'}
                           </li>
                           
                         </ul>
