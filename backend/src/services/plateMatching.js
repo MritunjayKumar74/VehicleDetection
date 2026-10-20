@@ -225,6 +225,12 @@ async function findPlateCandidates({ plate, make, model, color }) {
     .slice(0, 10)
 }
 
-module.exports = { SOURCE_NAMES, normalizePlate, findPlateCandidates }
+module.exports = {
+  SOURCE_NAMES,
+  normalizePlate,
+  plateDistance,
+  jaroWinkler,
+  findPlateCandidates
+}
 
 
