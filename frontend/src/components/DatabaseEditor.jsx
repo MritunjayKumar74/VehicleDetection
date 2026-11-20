@@ -9,6 +9,36 @@ const SOURCES = [
   'DB5_MotReports',
 ]
 
+const PHASE3_SCHEMAS = [
+  {
+    source: 'DB1', title: 'Camera Sightings', engine: 'MongoDB · cameradb',
+    entities: ['p3_locations', 'p3_cameras', 'p3_observed_vehicles', 'p3_camera_sightings', 'p3_sighting_media'],
+    keys: ['cameras.location_id → locations', 'sightings.camera_id → cameras', 'sightings.vehicle_id → observed_vehicles', 'media.sighting_id → sightings'],
+    note: 'ObjectId references; MongoDB does not enforce foreign keys.',
+  },
+  {
+    source: 'DB2', title: 'Insurance Records', engine: 'PostgreSQL · insurancedb',
+    entities: ['insurers', 'coverage_types', 'insurance_policies', 'policy_renewals', 'insurance_claims'],
+    keys: ['policies.insurer_id → insurers.insurer_id', 'policies.coverage_type_id → coverage_types.coverage_type_id', 'renewals.policy_id → policies.policy_id', 'claims.policy_id → policies.policy_id'],
+  },
+  {
+    source: 'DB3', title: 'Vehicle Registration', engine: 'MySQL · rtodb',
+    entities: ['rto_owners', 'rto_vehicle_models', 'rto_vehicles', 'rto_registrations', 'rto_ownership_history'],
+    keys: ['vehicles.model_id → vehicle_models.model_id', 'registrations.vehicle_id → vehicles.vehicle_id', 'registrations.owner_id → owners.owner_id', 'history.registration_id → registrations.registration_id; history.owner_id → owners.owner_id'],
+  },
+  {
+    source: 'DB4', title: 'Theft Records', engine: 'MongoDB · theftdb',
+    entities: ['p3_police_stations', 'p3_reported_vehicles', 'p3_theft_cases', 'p3_case_vehicles', 'p3_case_updates'],
+    keys: ['theft_cases.station_id → police_stations', 'case_vehicles.case_id → theft_cases', 'case_vehicles.vehicle_id → reported_vehicles', 'case_updates.case_id → theft_cases'],
+    note: 'ObjectId references; MongoDB does not enforce foreign keys.',
+  },
+  {
+    source: 'DB5', title: 'MOT Reports', engine: 'PostgreSQL · motdb',
+    entities: ['inspection_centres', 'mot_vehicles', 'mot_tests', 'mot_defects', 'mot_actions'],
+    keys: ['tests.vehicle_id → vehicles.vehicle_id', 'tests.centre_id → inspection_centres.centre_id', 'defects.test_id → tests.test_id', 'actions.test_id → tests.test_id'],
+  },
+]
+
 const API = `${import.meta.env.VITE_API_URL}/api/db`
 const POLL_INTERVAL = 5000
 
@@ -139,6 +169,41 @@ function DatabaseEditor() {
   // ── Render ────────────────────────────────────────────────────
   return (
     <div className="db-editor">
+
+      <section className="phase3-schema" aria-labelledby="phase3-schema-title">
+        <div className="phase3-schema-heading">
+          <div>
+            <span className="phase3-eyebrow">PHASE 3 · NORMALIZED STRUCTURE</span>
+            <h2 id="phase3-schema-title">Five sources, 25 related entities</h2>
+            <p>Each source distributes its data across five entities. Arrows show the referenced primary key.</p>
+          </div>
+          <span className="phase3-schema-badge">5 × 5 TABLES / COLLECTIONS</span>
+        </div>
+
+        <div className="phase3-schema-grid">
+          {PHASE3_SCHEMAS.map(schema => (
+            <article className="phase3-source-card" key={schema.source}>
+              <div className="phase3-source-title">
+                <span className="phase3-source-number">{schema.source}</span>
+                <div><h3>{schema.title}</h3><small>{schema.engine}</small></div>
+              </div>
+              <div className="phase3-entity-list" aria-label={`${schema.title} entities`}>
+                {schema.entities.map(entity => (
+                  <span className="phase3-entity" key={entity}>
+                    <i className="fas fa-table" aria-hidden="true" />{entity}
+                  </span>
+                ))}
+              </div>
+              <details className="phase3-relations">
+                <summary>View PK/FK relationships</summary>
+                <ul>{schema.keys.map(key => <li key={key}><code>{key}</code></li>)}</ul>
+                {schema.note && <p>{schema.note}</p>}
+              </details>
+            </article>
+          ))}
+        </div>
+        <p className="phase3-schema-footnote">Schema overview only. The editor below still browses the existing source-level records; normalized entities are not individually editable here.</p>
+      </section>
 
       {/* Source tabs */}
       <div className="db-tabs">
