@@ -48,8 +48,8 @@ router.get('/matches', async (req, res) => {
       algorithm: {
         name: 'Normalization + exact matching + Levenshtein distance + Jaro-Winkler similarity, with contextual Levenshtein comparisons',
         plateRules: 'Plate similarity is the average of normalized Levenshtein similarity and Jaro-Winkler similarity. Exact normalized equality has distance 0 and similarity 100%.',
-        candidateGate: 'Candidates must have Levenshtein distance at most 2 and combined plate similarity of at least 70%.',
-        ranking: 'Combined plate similarity receives 70% when context is available; make, model, and color are compared using normalized Levenshtein similarity and share the remaining 30%. Missing context is ignored.',
+        candidateGate: 'Candidates must have normalized Levenshtein distance at most 2 and plate similarity of at least 70%.',
+        ranking: 'Plate similarity is the average of normalized Levenshtein and Jaro-Winkler similarity. When make, model, or color data is available, plate similarity contributes 70% and available context contributes 30%. The displayed score is a ranking score, not a probability. If the top two scores are fewer than 5 points apart, the top result is flagged for manual review.',
       },
     })
   } catch (err) {

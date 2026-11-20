@@ -228,6 +228,18 @@ export default function PlateUpload() {
                 </span>
                 <span className="ocr-candidate-details">
                   Plate similarity {candidate.plateSimilarity}% - Levenshtein distance {candidate.plateDistance}
+                  <span className="ocr-candidate-details">
+                    Levenshtein {candidate.levenshteinSimilarity}% · Jaro-Winkler {candidate.jaroWinklerSimilarity}%
+                    {candidate.contextScore !== null && candidate.contextScore !== undefined
+                      ? ` · Context ${candidate.contextScore}% (${candidate.contextFieldsUsed.join(', ')})`
+                      : ' · No context data used'}
+                  </span>
+                    
+                  {candidate.ambiguousTopMatch && (
+                    <span className="ocr-candidate-details" role="status">
+                      Close scores: review this match carefully. The top two candidates differ by only {candidate.topTwoScoreGap} points.
+                    </span>
+                  )}
                 </span>
                 <span className="ocr-candidate-details">
                   {[candidate.registration?.make, candidate.registration?.model, candidate.registration?.year, candidate.camera?.color].filter(Boolean).join(' | ') || 'No vehicle context recorded'}

@@ -172,15 +172,23 @@ async function findPlateCandidates({ plate, make, model, color }) {
     { name: 'model', value: model, get: c => c.registration?.vehicle_model, weight: 0.12 },
     { name: 'color', value: color, get: c => c.camera?.vehicle_color, weight: 0.06 },
   ].filter(item => String(item.value || '').trim())
-  return [...byPlate.values()]
+  const rankedCandidates = [...byPlate.values()]
     .map(candidate => {
       const distance = plateDistance(normalizedInput, candidate.plate)
-      const levenshteinSimilarity = Math.max(0, 1 - distance / Math.max(normalizedInput.length, normalizePlate(candidate.plate).length))
+      const candidatePlate = normalizePlate(candidate.plate)
+    
+      const levenshteinSimilarity = Math.max(
+        0,
+        1 - distance / Math.max(normalizedInput.length, candidatePlate.length)
+      )
+    
       const jaroWinklerSimilarity = jaroWinkler(normalizedInput, candidate.plate)
       const plateScore = (levenshteinSimilarity + jaroWinklerSimilarity) / 2
+    
       const contextMatches = context.map(item => {
         const value = item.get(candidate)
         const similarity = textSimilarity(item.value, value)
+      
         return {
           field: item.name,
           scanned: String(item.value).trim(),
@@ -189,40 +197,89 @@ async function findPlateCandidates({ plate, make, model, color }) {
           matched: similarity !== null && similarity >= 0.75,
         }
       })
+    
       const availableContext = contextMatches
-        .map((match, index) => ({ ...match, weight: context[index].weight }))
+        .map((match, index) => ({
+          ...match,
+          weight: context[index].weight,
+        }))
         .filter(match => match.similarity !== null)
-      const availableWeight = availableContext.reduce((sum, match) => sum + match.weight, 0)
-      const score = availableWeight
-        ? plateScore * 0.70 + availableContext.reduce(
-          (sum, match) => sum + match.similarity * (0.30 * match.weight / availableWeight),
-          0
-        )
-        : plateScore
+      
+      const availableWeight = availableContext.reduce(
+        (sum, match) => sum + match.weight,
+        0
+      )
+    
+      const contextScore = availableWeight
+        ? availableContext.reduce(
+            (sum, match) => sum + match.similarity * match.weight,
+            0
+          ) / availableWeight
+        : null
+        
+      const combinedScore = contextScore === null
+        ? plateScore
+        : plateScore * 0.70 + contextScore * 0.30
+        
       return {
         plate: candidate.plate,
-        score: Math.round(score * 100),
+      
+        // This is a ranking score, not a probability of identity.
+        score: Math.round(combinedScore * 100),
+      
+        // Keep each piece of evidence visible to the UI and evaluator.
         plateSimilarity: Math.round(plateScore * 100),
         plateDistance: distance,
         levenshteinSimilarity: Math.round(levenshteinSimilarity * 100),
         jaroWinklerSimilarity: Math.round(jaroWinklerSimilarity * 100),
+        contextScore: contextScore === null
+          ? null
+          : Math.round(contextScore * 100),
+        contextFieldsUsed: availableContext.map(match => match.field),
         contextMatches,
+      
         registration: candidate.registration && {
           make: candidate.registration.vehicle_make,
           model: candidate.registration.vehicle_model,
           year: candidate.registration.year_of_manufacture,
         },
+      
         camera: candidate.camera && {
           color: candidate.camera.vehicle_color,
           type: candidate.camera.vehicle_type,
           location: candidate.camera.location,
         },
+      
         sourceRecords: candidate.sources,
       }
     })
-    .filter(candidate => candidate.plateDistance <= 2 && candidate.plateSimilarity >= 70)
-    .sort((a, b) => b.score - a.score || a.plateDistance - b.plateDistance)
-    .slice(0, 10)
+    .filter(candidate =>
+      candidate.plateDistance <= 2 &&
+      candidate.plateSimilarity >= 70
+    )
+    .sort((a, b) =>
+      b.score - a.score ||
+      a.plateDistance - b.plateDistance ||
+      a.plate.localeCompare(b.plate)
+    )
+  
+  const candidates = rankedCandidates.slice(0, 10)
+  const topTwoGap = candidates.length > 1
+    ? candidates[0].score - candidates[1].score
+    : null
+  
+  return candidates.map((candidate, index) => ({
+    ...candidate,
+  
+    // A small gap means the ranking does not clearly separate the leaders.
+    // Five points is a provisional review threshold; validate it with tests.
+    ambiguousTopMatch:
+      index === 0 &&
+      topTwoGap !== null &&
+      topTwoGap < 5,
+  
+    topTwoScoreGap: index === 0 ? topTwoGap : null,
+  }))
 }
 
 module.exports = {
