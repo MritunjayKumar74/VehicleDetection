@@ -66,7 +66,8 @@ async function seed() {
     const captureTime = faker.date.recent({ days: 30 })
     const address = `${faker.location.streetAddress()}, ${faker.location.city()}`
     const contact = `9${faker.string.numeric(9)}`
-    const year = faker.number.int({ min: 2015, max: 2023 })
+    // Registration must not predate manufacture; both legacy and Phase 3 rows reuse this value.
+    const year = faker.number.int({ min: 2015, max: regDate.getFullYear() })
     const engine = faker.string.alphanumeric(12).toUpperCase()
     const chassis = faker.string.alphanumeric(17).toUpperCase()
     const fuel = faker.helpers.arrayElement(fuelTypes)

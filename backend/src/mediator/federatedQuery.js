@@ -8,6 +8,163 @@ function normalizePlate(value) {
   return String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '')
 }
 
+function stringifyIdentifiers(value) {
+  if (value == null) return null
+  if (typeof value.toHexString === 'function') return value.toHexString()
+  if (Array.isArray(value)) return value.map(stringifyIdentifiers)
+  if (typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, stringifyIdentifiers(item)]))
+  }
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value)
+      if (parsed && typeof parsed === 'object') return stringifyIdentifiers(parsed)
+    } catch {}
+  }
+  return value
+}
+
+function buildQueryContext(plate, results) {
+  const sourceDefinitions = [
+    { source: 'DB1_CameraSightings', index: 0, fields: ['location', 'capture_timestamp', 'camera_id', 'vehicle_color', 'vehicle_type'] },
+    { source: 'DB2_InsuranceRecords', index: 1, fields: ['insurer_company', 'policy_type', 'start_date', 'expiry_date', 'is_active', 'claims', 'renewals'] },
+    { source: 'DB3_VehicleRegistration', index: 2, fields: ['vehicle_make', 'vehicle_model', 'year_of_manufacture', 'fuel_type'] },
+    { source: 'DB4_TheftRecords', index: 3, fields: ['status', 'reported_date', 'fir_number', 'police_station', 'remarks'] },
+    { source: 'DB5_MotReports', index: 4, fields: ['report_type', 'report_date', 'remarks', 'action_taken', 'resolved'] },
+  ]
+
+  const bySource = sourceDefinitions.map(({ source, index, fields }) => {
+    const result = results[index]
+    const data = result.data
+    const signals = data
+      ? fields
+        .filter(field => data[field] !== null && data[field] !== undefined && data[field] !== ''
+          && (!Array.isArray(data[field]) || data[field].length > 0))
+        .map(field => ({ field, value: data[field] }))
+      : []
+
+    return {
+      source,
+      found: Boolean(data),
+      error: result.error || null,
+      entityIds: stringifyIdentifiers(data?.source_ids),
+      signals,
+    }
+  })
+
+  return {
+    query: { plate, normalizedPlate: normalizePlate(plate) },
+    bySource,
+    signals: bySource.flatMap(({ source, entityIds, signals }) =>
+      signals.map(signal => ({ ...signal, source, entityIds }))
+    ),
+  }
+}
+
+const NOTE_CONTEXT_FIELDS = new Set([
+  'location', 'vehicle_color', 'vehicle_type', 'vehicle_make', 'vehicle_model',
+  'fuel_type', 'police_station',
+])
+const NOTE_STOP_WORDS = new Set(['THE', 'AND', 'FOR', 'NEAR', 'VEHICLE', 'CAMERA', 'CAM', 'TYPE'])
+
+function textTerms(value) {
+  return String(value || '').toUpperCase().match(/[A-Z0-9]{3,}/g) || []
+}
+
+function getNoteContextTerms(context) {
+  return [...new Set(context.signals
+    .filter(signal => NOTE_CONTEXT_FIELDS.has(signal.field))
+    .flatMap(signal => textTerms(signal.value)))]
+    .filter(term => !NOTE_STOP_WORDS.has(term))
+}
+
+async function searchUnstructuredCaseNotes(plate, context) {
+  const db = getTheftDb()
+  const contextTerms = getNoteContextTerms(context)
+  const normalizedPlate = normalizePlate(plate)
+  const candidates = await db.collection('p3_case_updates').aggregate([
+    { $match: { notes: { $type: 'string', $ne: '' } } },
+    { $lookup: { from: 'p3_theft_cases', localField: 'case_id', foreignField: '_id', as: 'theftCase' } },
+    { $unwind: { path: '$theftCase', preserveNullAndEmptyArrays: true } },
+    { $lookup: { from: 'p3_case_vehicles', localField: 'theftCase._id', foreignField: 'case_id', as: 'caseVehicles' } },
+    { $unwind: { path: '$caseVehicles', preserveNullAndEmptyArrays: true } },
+    { $lookup: { from: 'p3_reported_vehicles', localField: 'caseVehicles.vehicle_id', foreignField: '_id', as: 'vehicle' } },
+    { $unwind: { path: '$vehicle', preserveNullAndEmptyArrays: true } },
+    { $lookup: { from: 'p3_police_stations', localField: 'theftCase.station_id', foreignField: '_id', as: 'station' } },
+    { $unwind: { path: '$station', preserveNullAndEmptyArrays: true } },
+    { $project: {
+      notes: 1,
+      updated_at: 1,
+      update_status: '$status',
+      case_id: '$theftCase._id',
+      fir_number: '$theftCase.fir_number',
+      case_status: '$theftCase.case_status',
+      police_station: '$station.name',
+      reported_plate: '$vehicle.plate_raw',
+      make: '$vehicle.make',
+      model: '$vehicle.model',
+      color: '$vehicle.color',
+      reported_status: '$caseVehicles.reported_status',
+      source_ids: {
+        update: '$_id', case: '$theftCase._id',
+        caseVehicle: '$caseVehicles._id', vehicle: '$vehicle._id', station: '$station._id',
+      },
+    } },
+  ]).toArray()
+
+  const ranked = candidates.map(candidate => {
+    const noteTerms = new Set(textTerms(candidate.notes))
+    const matchedTerms = contextTerms.filter(term => noteTerms.has(term))
+    const normalizedNote = normalizePlate(candidate.notes)
+    const plateMatch = Boolean(normalizedPlate) && normalizedNote.includes(normalizedPlate)
+    const contextRatio = contextTerms.length ? matchedTerms.length / contextTerms.length : 0
+    // This is an explainable ranking score, not a probability.
+    const relevanceScore = plateMatch
+      ? 70 + Math.round(contextRatio * 30)
+      : Math.round(contextRatio * 100)
+    const relevant = plateMatch || (matchedTerms.length >= 2 && relevanceScore >= 35)
+
+    return {
+      note: candidate.notes,
+      updatedAt: candidate.updated_at || null,
+      updateStatus: candidate.update_status || null,
+      case: {
+        firNumber: candidate.fir_number || null,
+        status: candidate.case_status || null,
+        policeStation: candidate.police_station || null,
+      },
+      vehicle: {
+        plate: candidate.reported_plate || null,
+        make: candidate.make || null,
+        model: candidate.model || null,
+        color: candidate.color || null,
+        reportedStatus: candidate.reported_status || null,
+      },
+      source: 'DB4_TheftRecords.p3_case_updates',
+      sourceIds: stringifyIdentifiers(candidate.source_ids),
+      plateMatch,
+      matchedTerms,
+      relevanceScore,
+      relevant,
+    }
+  })
+
+  const matches = ranked
+    .filter(item => item.relevant)
+    .sort((a, b) => b.relevanceScore - a.relevanceScore
+      || new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0))
+    .slice(0, 5)
+    .map(({ relevant, ...match }) => match)
+
+  return {
+    source: 'DB4_TheftRecords.p3_case_updates',
+    contextTerms,
+    candidatesScanned: candidates.length,
+    matches,
+    rankingNote: 'Relevance score ranks note/context overlap and exact plate mentions; it is not a probability.',
+  }
+}
+
 async function queryCamera(plate) {
   const db = getCameraDb()
   const normalized = normalizePlate(plate)
@@ -117,9 +274,26 @@ async function federatedLookup(plate) {
     camera: results[0].data, insurance: results[1].data,
     registration: results[2].data, theft: results[3].data, mot: results[4].data,
   })
+  const context = buildQueryContext(plate, results)
+  const noteSearchStarted = Date.now()
+  let unstructuredSearch
+  try {
+    unstructuredSearch = await searchUnstructuredCaseNotes(plate, context)
+    unstructuredSearch.latency = `${Date.now() - noteSearchStarted}ms`
+    unstructuredSearch.error = null
+  } catch (error) {
+    unstructuredSearch = {
+      source: 'DB4_TheftRecords.p3_case_updates',
+      contextTerms: getNoteContextTerms(context),
+      candidatesScanned: 0,
+      matches: [],
+      latency: `${Date.now() - noteSearchStarted}ms`,
+      error: error.message,
+    }
+  }
   const consistency = checkVehicleConsistency({ registration: results[2].data, insurance: results[1].data })
   const sourceLatencies = results.map(s => ({ source: s.source, latency: s.latency !== null ? `${s.latency}ms` : null, found: s.data !== null, error: s.error || null }))
-  return { profile, consistency, meta: { total_latency: `${Date.now() - start}ms`, sources: sourceLatencies } }
+  return { profile, context, unstructuredSearch, consistency, meta: { total_latency: `${Date.now() - start}ms`, sources: sourceLatencies } }
 }
 
 module.exports = { federatedLookup }

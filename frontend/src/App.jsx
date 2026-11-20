@@ -6,6 +6,20 @@ import DatabaseEditor from './components/DatabaseEditor'
 import SqlConsole from './components/SqlConsole'
 import PlateUpload from './PlateUpload';
 
+function formatContextValue(value) {
+  if (Array.isArray(value)) {
+    return value.map(item => item && typeof item === 'object'
+      ? Object.entries(item).map(([key, itemValue]) => `${key}: ${itemValue}`).join(' · ')
+      : String(item)).join('; ')
+  }
+  if (value && typeof value === 'object') return JSON.stringify(value)
+  return String(value)
+}
+
+function readableFieldName(field) {
+  return field.replace(/_/g, ' ')
+}
+
 function App() {
   const [plate, setPlate] = useState('')
   const [loading, setLoading] = useState(false)
@@ -18,6 +32,10 @@ function App() {
   const [color, setColor] = useState('')
   const [algorithm, setAlgorithm] = useState(null)
   const [activePage, setActivePage] = useState('dashboard')
+  const [contextFilters, setContextFilters] = useState({ location: '', make: '', model: '', color: '', vehicleType: '' })
+  const [contextSearchResult, setContextSearchResult] = useState(null)
+  const [contextSearchError, setContextSearchError] = useState(null)
+  const [contextSearchLoading, setContextSearchLoading] = useState(false)
 
   const runSearch = async (searchPlate = plate) => {
     const queryPlate = searchPlate.trim().toUpperCase()
@@ -36,7 +54,7 @@ function App() {
       if (color.trim()) candidateQuery.set('color', color.trim())
 
       const [lookupResponse, matchesResponse] = await Promise.all([
-        fetch(`${import.meta.env.VITE_API_URL}/api/vehicle/${encodeURIComponent(queryPlate)}`),
+        fetch(`${import.meta.env.VITE_API_URL}/api/vehicle/${encodeURIComponent(queryPlate)}?refresh=true`),
         fetch(`${import.meta.env.VITE_API_URL}/api/vehicle/matches?${candidateQuery.toString()}`),
       ])
       const [lookupData, matchesData] = await Promise.all([
@@ -61,6 +79,33 @@ function App() {
   const handleSearch = (e) => {
     e.preventDefault()
     runSearch()
+  }
+
+  const handleContextSearch = async (e) => {
+    e.preventDefault()
+    const filters = Object.fromEntries(
+      Object.entries(contextFilters).map(([key, value]) => [key, value.trim()]).filter(([, value]) => value)
+    )
+    if (!Object.keys(filters).length) {
+      setContextSearchError('Enter at least one context clue to search.')
+      setContextSearchResult(null)
+      return
+    }
+
+    setContextSearchLoading(true)
+    setContextSearchError(null)
+    setContextSearchResult(null)
+    try {
+      const query = new URLSearchParams(filters)
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/vehicle/context-search?${query.toString()}`)
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Context search failed')
+      setContextSearchResult(data)
+    } catch (err) {
+      setContextSearchError(err.message)
+    } finally {
+      setContextSearchLoading(false)
+    }
   }
 
   const getStatusColor = (status) => {
@@ -231,6 +276,78 @@ function App() {
                 </div>
               </form>
 
+              <section className="context-search-section" aria-labelledby="context-search-title">
+                <div className="context-search-heading">
+                  <div>
+                    <h2 id="context-search-title"><i className="fas fa-filter"></i> Search by vehicle context</h2>
+                    <p>Search connected databases without knowing the plate. Enter one or more clues; every clue must match the same vehicle.</p>
+                  </div>
+                </div>
+                <form className="context-search-form" onSubmit={handleContextSearch}>
+                  <input aria-label="Location clue" placeholder="Location / police station" value={contextFilters.location} onChange={e => setContextFilters(current => ({ ...current, location: e.target.value }))} />
+                  <input aria-label="Vehicle make clue" placeholder="Make (e.g. Honda)" value={contextFilters.make} onChange={e => setContextFilters(current => ({ ...current, make: e.target.value }))} />
+                  <input aria-label="Vehicle model clue" placeholder="Model (e.g. WRV)" value={contextFilters.model} onChange={e => setContextFilters(current => ({ ...current, model: e.target.value }))} />
+                  <input aria-label="Vehicle color clue" placeholder="Color (e.g. Silver)" value={contextFilters.color} onChange={e => setContextFilters(current => ({ ...current, color: e.target.value }))} />
+                  <input aria-label="Vehicle type clue" placeholder="Vehicle type (e.g. Sedan)" value={contextFilters.vehicleType} onChange={e => setContextFilters(current => ({ ...current, vehicleType: e.target.value }))} />
+                  <button type="submit" disabled={contextSearchLoading}>
+                    {contextSearchLoading ? 'Searching databases…' : 'Search by context'}
+                  </button>
+                </form>
+                {contextSearchError && <p className="context-search-error" role="alert">{contextSearchError}</p>}
+                {contextSearchLoading && <p className="context-search-status">Searching structured records across the connected sources…</p>}
+                {contextSearchResult && (
+                  <div className="context-search-results">
+                    <div className="context-search-summary">
+                      <strong>{contextSearchResult.totalMatches} matching vehicle{contextSearchResult.totalMatches === 1 ? '' : 's'}</strong>
+                      <span>Sources checked: {contextSearchResult.sourceStatus.filter(source => !source.error).length}/5</span>
+                    </div>
+                    <p className="context-match-rule">{contextSearchResult.matchRule}</p>
+                    {contextSearchResult.sourceStatus.some(source => source.error) && (
+                      <p className="context-source-warning">Some sources could not be searched: {contextSearchResult.sourceStatus.filter(source => source.error).map(source => source.source).join(', ')}.</p>
+                    )}
+                    {contextSearchResult.matches.length ? (
+                      <div className="context-result-list">
+                        {contextSearchResult.matches.map(match => (
+                          <article className="context-result-card" key={match.plate}>
+                            <div className="context-result-topline">
+                              <div>
+                                <h3>{match.plate}</h3>
+                                <span>{match.sources.length} source{match.sources.length === 1 ? '' : 's'} contributed records</span>
+                              </div>
+                              <button type="button" onClick={() => { setPlate(match.plate); runSearch(match.plate) }}>Open full vehicle lookup</button>
+                            </div>
+                            <div className="context-result-evidence">
+                              {match.matchedContext.map(item => (
+                                <div className="context-result-clue" key={item.field}>
+                                  <b>{readableFieldName(item.field)} contains “{item.query}”</b>
+                                  <span>{item.evidence.map(evidence => `${evidence.source}: ${evidence.value}`).join(' · ')}</span>
+                                </div>
+                              ))}
+                            </div>
+                            <details className="context-source-records">
+                              <summary>View matching database records ({match.sourceRecords.length})</summary>
+                              <div className="context-source-record-list">
+                                {match.sourceRecords.map((record, index) => (
+                                  <div className="context-source-record" key={`${record.source}-${index}`}>
+                                    <strong>{record.source}</strong>
+                                    <span>{Object.entries(record.fields).filter(([, value]) => value !== null && value !== undefined && value !== '').map(([field, value]) => `${readableFieldName(field)}: ${formatContextValue(value)}`).join(' · ')}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </details>
+                          </article>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="context-search-empty">No vehicle records matched every entered clue. Try fewer or broader clues.</p>
+                    )}
+                    {contextSearchResult.totalMatches > contextSearchResult.limit && (
+                      <p className="context-search-status">Showing the first {contextSearchResult.limit} of {contextSearchResult.totalMatches} matches.</p>
+                    )}
+                  </div>
+                )}
+              </section>
+
               {algorithm && (
                 <details className="ocr-algorithm">
                   <summary>How close plate matches are ranked</summary>
@@ -329,6 +446,97 @@ function App() {
                     )}
 
                   </div>
+
+                  <section className="query-context-panel" aria-labelledby="query-context-title">
+                    <div className="query-panel-heading">
+                      <div>
+                        <h3 id="query-context-title"><i className="fas fa-diagram-project"></i> Structured context gathered</h3>
+                        <p>Evidence discovered across source relationships for {result.context?.query?.normalizedPlate || result.profile?.plate || plate}.</p>
+                      </div>
+                      <span className="query-panel-count">{result.context?.signals?.length || 0} context signals</span>
+                    </div>
+                    {result.context?.bySource?.length ? (
+                      <div className="query-context-grid">
+                        {result.context.bySource.map(source => (
+                          <article className={`query-context-source ${source.found ? 'found' : 'not-found'}`} key={source.source}>
+                            <div className="query-context-source-heading">
+                              <strong>{source.source}</strong>
+                              <span>{source.found ? 'Context found' : source.error ? 'Source error' : 'No record'}</span>
+                            </div>
+                            {source.error && <p className="query-source-error">{source.error}</p>}
+                            {source.signals?.length ? (
+                              <dl className="query-context-signals">
+                                {source.signals.map(signal => (
+                                  <div className="query-context-signal" key={`${signal.field}-${formatContextValue(signal.value)}`}>
+                                    <dt>{readableFieldName(signal.field)}</dt>
+                                    <dd>{formatContextValue(signal.value)}</dd>
+                                  </div>
+                                ))}
+                              </dl>
+                            ) : (
+                              <p className="query-context-empty">No structured context returned.</p>
+                            )}
+                            {source.entityIds && Object.keys(source.entityIds).length > 0 && (
+                              <details className="query-context-ids">
+                                <summary>Linked entity IDs</summary>
+                                <div className="query-context-id-list">
+                                  {Object.entries(source.entityIds).map(([name, id]) => (
+                                    <span key={name}><b>{name}</b> {String(id)}</span>
+                                  ))}
+                                </div>
+                              </details>
+                            )}
+                          </article>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="query-context-empty">No context was returned. Try the lookup again.</p>
+                    )}
+                  </section>
+
+                  <section className="unstructured-panel" aria-labelledby="unstructured-title">
+                    <div className="query-panel-heading">
+                      <div>
+                        <h3 id="unstructured-title"><i className="fas fa-file-lines"></i> Context-matched case notes</h3>
+                        <p>Unstructured notes ranked against the gathered vehicle and camera context.</p>
+                      </div>
+                      {result.unstructuredSearch && (
+                        <span className="query-panel-count">{result.unstructuredSearch.matches?.length || 0} relevant notes</span>
+                      )}
+                    </div>
+                    {result.unstructuredSearch?.error ? (
+                      <p className="unstructured-empty error-text">Note search failed: {result.unstructuredSearch.error}</p>
+                    ) : result.unstructuredSearch?.matches?.length ? (
+                      <div className="unstructured-match-list">
+                        {result.unstructuredSearch.matches.map((match, index) => (
+                          <article className="unstructured-match" key={match.sourceIds?.update || `${match.case?.firNumber || 'case'}-${index}`}>
+                            <div className="unstructured-match-heading">
+                              <strong>{match.case?.firNumber || 'Case note'}</strong>
+                              <span>Relevance rank {match.relevanceScore}/100 · not a probability</span>
+                            </div>
+                            <blockquote>{match.note}</blockquote>
+                            <div className="unstructured-match-meta">
+                              <span><b>Vehicle:</b> {match.vehicle?.plate || 'Unknown plate'}{match.vehicle?.make ? ` · ${match.vehicle.make} ${match.vehicle.model || ''}` : ''}</span>
+                              <span><b>Case:</b> {match.case?.status || match.updateStatus || 'Status unavailable'}{match.case?.policeStation ? ` · ${match.case.policeStation}` : ''}</span>
+                              {match.updatedAt && <span><b>Updated:</b> {new Date(match.updatedAt).toLocaleString()}</span>}
+                              <span><b>Match basis:</b> {match.plateMatch ? 'exact plate in note' : 'shared context terms'}</span>
+                            </div>
+                            {match.matchedTerms?.length > 0 && (
+                              <div className="matched-context-terms">
+                                <b>Matched context:</b>
+                                {match.matchedTerms.map(term => <span key={term}>{term}</span>)}
+                              </div>
+                            )}
+                            <small className="unstructured-source">Source: {match.source}</small>
+                          </article>
+                        ))}
+                      </div>
+                    ) : result.unstructuredSearch ? (
+                      <p className="unstructured-empty">No relevant unstructured case notes found for this plate and context. Scanned {result.unstructuredSearch.candidatesScanned || 0} notes from {result.unstructuredSearch.source}.</p>
+                    ) : (
+                      <p className="unstructured-empty">No note-search result was returned. Run a fresh lookup to populate it.</p>
+                    )}
+                  </section>
                   
                   
                   {/* =========================

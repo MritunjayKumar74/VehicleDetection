@@ -4,6 +4,7 @@ const { getOrRefresh, getViewStats} = require('../views/materializedView')
 const { getSearchHistory, logSearch } = require('../connectors/mysql')
 const { findPlateCandidates } = require('../services/plateMatching')
 const { reconcileNoisyPlate } = require('../services/plateReconciliation')
+const { searchVehiclesByContext } = require('../services/contextSearch')
 
 /**
  * GET /api/vehicle/:plate
@@ -54,6 +55,21 @@ router.get('/matches', async (req, res) => {
     })
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message || 'Candidate search failed' })
+  }
+})
+
+router.get('/context-search', async (req, res) => {
+  try {
+    const result = await searchVehiclesByContext({
+      location: req.query.location,
+      make: req.query.make,
+      model: req.query.model,
+      color: req.query.color,
+      vehicleType: req.query.vehicleType,
+    })
+    res.json(result)
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message || 'Context search failed' })
   }
 })
 

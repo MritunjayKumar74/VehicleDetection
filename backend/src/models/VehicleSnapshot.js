@@ -8,6 +8,8 @@ const mongoose = require('mongoose')
 const VehicleSnapshotSchema = new mongoose.Schema({
   plate:         { type: String, unique: true, index: true },
   profile:       { type: Object },          // full VehicleProfile
+  context:       { type: Object },          // source-attributed structured query context
+  unstructuredSearch: { type: Object },     // context-ranked free-text note matches
   overall_status:{ type: String },          // CLEAR / UNINSURED / STOLEN etc.
   is_stale:      { type: Boolean, default: false },
   stale_reason:  { type: String, default: null },
