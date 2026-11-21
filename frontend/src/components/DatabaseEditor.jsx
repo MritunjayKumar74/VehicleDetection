@@ -11,34 +11,61 @@ const SOURCES = [
 
 const PHASE3_SCHEMAS = [
   {
-    source: 'DB1', title: 'Camera Sightings', engine: 'MongoDB · cameradb',
-    entities: ['p3_locations', 'p3_cameras', 'p3_observed_vehicles', 'p3_camera_sightings', 'p3_sighting_media'],
-    keys: ['cameras.location_id → locations', 'sightings.camera_id → cameras', 'sightings.vehicle_id → observed_vehicles', 'media.sighting_id → sightings'],
-    note: 'ObjectId references; MongoDB does not enforce foreign keys.',
+    source: 'DB1', title: 'Camera Sightings', engine: 'MongoDB · cameradb', referenceLabel: 'REF',
+    entities: [
+      { name: 'p3_locations', pk: '_id' },
+      { name: 'p3_cameras', pk: '_id', refs: ['location_id → p3_locations._id'] },
+      { name: 'p3_observed_vehicles', pk: '_id' },
+      { name: 'p3_camera_sightings', pk: '_id', refs: ['camera_id → p3_cameras._id', 'vehicle_id → p3_observed_vehicles._id'] },
+      { name: 'p3_sighting_media', pk: '_id', refs: ['sighting_id → p3_camera_sightings._id'] },
+    ],
+    note: 'MongoDB ObjectId references are application-managed; MongoDB does not enforce foreign-key constraints.',
   },
   {
-    source: 'DB2', title: 'Insurance Records', engine: 'PostgreSQL · insurancedb',
-    entities: ['insurers', 'coverage_types', 'insurance_policies', 'policy_renewals', 'insurance_claims'],
-    keys: ['policies.insurer_id → insurers.insurer_id', 'policies.coverage_type_id → coverage_types.coverage_type_id', 'renewals.policy_id → policies.policy_id', 'claims.policy_id → policies.policy_id'],
+    source: 'DB2', title: 'Insurance Records', engine: 'PostgreSQL · insurancedb', referenceLabel: 'FK',
+    entities: [
+      { name: 'insurers', pk: 'insurer_id' },
+      { name: 'coverage_types', pk: 'coverage_type_id' },
+      { name: 'insurance_policies', pk: 'policy_id', refs: ['insurer_id → insurers.insurer_id', 'coverage_type_id → coverage_types.coverage_type_id'] },
+      { name: 'policy_renewals', pk: 'renewal_id', refs: ['policy_id → insurance_policies.policy_id'] },
+      { name: 'insurance_claims', pk: 'claim_id', refs: ['policy_id → insurance_policies.policy_id'] },
+    ],
+    note: 'Legacy insurance_records remains for existing Phase 2/editor paths; the five entities above are the Phase 3 normalized schema.',
   },
   {
-    source: 'DB3', title: 'Vehicle Registration', engine: 'MySQL · rtodb',
-    entities: ['rto_owners', 'rto_vehicle_models', 'rto_vehicles', 'rto_registrations', 'rto_ownership_history'],
-    keys: ['vehicles.model_id → vehicle_models.model_id', 'registrations.vehicle_id → vehicles.vehicle_id', 'registrations.owner_id → owners.owner_id', 'history.registration_id → registrations.registration_id; history.owner_id → owners.owner_id'],
+    source: 'DB3', title: 'Vehicle Registration', engine: 'MySQL · rtodb', referenceLabel: 'FK',
+    entities: [
+      { name: 'rto_owners', pk: 'owner_id' },
+      { name: 'rto_vehicle_models', pk: 'model_id' },
+      { name: 'rto_vehicles', pk: 'vehicle_id', refs: ['model_id → rto_vehicle_models.model_id'] },
+      { name: 'rto_registrations', pk: 'registration_id', refs: ['vehicle_id → rto_vehicles.vehicle_id', 'owner_id → rto_owners.owner_id'] },
+      { name: 'rto_ownership_history', pk: 'history_id', refs: ['registration_id → rto_registrations.registration_id', 'owner_id → rto_owners.owner_id'] },
+    ],
+    note: 'Legacy vehicle_registrations remains for existing Phase 2/editor paths; the five entities above are the Phase 3 normalized schema.',
   },
   {
-    source: 'DB4', title: 'Theft Records', engine: 'MongoDB · theftdb',
-    entities: ['p3_police_stations', 'p3_reported_vehicles', 'p3_theft_cases', 'p3_case_vehicles', 'p3_case_updates'],
-    keys: ['theft_cases.station_id → police_stations', 'case_vehicles.case_id → theft_cases', 'case_vehicles.vehicle_id → reported_vehicles', 'case_updates.case_id → theft_cases'],
-    note: 'ObjectId references; MongoDB does not enforce foreign keys.',
+    source: 'DB4', title: 'Theft Records', engine: 'MongoDB · theftdb', referenceLabel: 'REF',
+    entities: [
+      { name: 'p3_police_stations', pk: '_id' },
+      { name: 'p3_reported_vehicles', pk: '_id' },
+      { name: 'p3_theft_cases', pk: '_id', refs: ['station_id → p3_police_stations._id'] },
+      { name: 'p3_case_vehicles', pk: '_id', refs: ['case_id → p3_theft_cases._id', 'vehicle_id → p3_reported_vehicles._id'] },
+      { name: 'p3_case_updates', pk: '_id', refs: ['case_id → p3_theft_cases._id'] },
+    ],
+    note: 'MongoDB ObjectId references are application-managed; MongoDB does not enforce foreign-key constraints.',
   },
   {
-    source: 'DB5', title: 'MOT Reports', engine: 'PostgreSQL · motdb',
-    entities: ['inspection_centres', 'mot_vehicles', 'mot_tests', 'mot_defects', 'mot_actions'],
-    keys: ['tests.vehicle_id → vehicles.vehicle_id', 'tests.centre_id → inspection_centres.centre_id', 'defects.test_id → tests.test_id', 'actions.test_id → tests.test_id'],
+    source: 'DB5', title: 'MOT Reports', engine: 'PostgreSQL · motdb', referenceLabel: 'FK',
+    entities: [
+      { name: 'inspection_centres', pk: 'centre_id' },
+      { name: 'mot_vehicles', pk: 'vehicle_id' },
+      { name: 'mot_tests', pk: 'test_id', refs: ['vehicle_id → mot_vehicles.vehicle_id', 'centre_id → inspection_centres.centre_id'] },
+      { name: 'mot_defects', pk: 'defect_id', refs: ['test_id → mot_tests.test_id'] },
+      { name: 'mot_actions', pk: 'action_id', refs: ['test_id → mot_tests.test_id'] },
+    ],
+    note: 'Legacy mot_reports remains for existing Phase 2/editor paths; the five entities above are the Phase 3 normalized schema.',
   },
 ]
-
 const API = `${import.meta.env.VITE_API_URL}/api/db`
 const POLL_INTERVAL = 5000
 
@@ -174,10 +201,10 @@ function DatabaseEditor() {
         <div className="phase3-schema-heading">
           <div>
             <span className="phase3-eyebrow">PHASE 3 · NORMALIZED STRUCTURE</span>
-            <h2 id="phase3-schema-title">Five sources, 25 related entities</h2>
-            <p>Each source distributes its data across five entities. Arrows show the referenced primary key.</p>
+            <h2 id="phase3-schema-title">Five sources, five tables each</h2>
+            <p>Every card shows each Phase 3 table or collection, its primary key, and the foreign-key/reference links to related entities.</p>
           </div>
-          <span className="phase3-schema-badge">5 × 5 TABLES / COLLECTIONS</span>
+          <span className="phase3-schema-badge">25 PHASE 3 TABLES / COLLECTIONS</span>
         </div>
 
         <div className="phase3-schema-grid">
@@ -189,20 +216,27 @@ function DatabaseEditor() {
               </div>
               <div className="phase3-entity-list" aria-label={`${schema.title} entities`}>
                 {schema.entities.map(entity => (
-                  <span className="phase3-entity" key={entity}>
-                    <i className="fas fa-table" aria-hidden="true" />{entity}
-                  </span>
+                  <div className="phase3-entity" key={entity.name}>
+                    <div className="phase3-entity-name">
+                      <i className="fas fa-table" aria-hidden="true" />
+                      <code>{entity.name}</code>
+                    </div>
+                    <div className="phase3-keyline"><span className="phase3-key-badge phase3-pk-badge">PK</span><code>{entity.pk}</code></div>
+                    {entity.refs?.map(reference => (
+                      <div className="phase3-keyline" key={reference}>
+                        <span className="phase3-key-badge">{schema.referenceLabel}</span>
+                        <code>{reference}</code>
+                      </div>
+                    ))}
+                  </div>
                 ))}
               </div>
-              <details className="phase3-relations">
-                <summary>View PK/FK relationships</summary>
-                <ul>{schema.keys.map(key => <li key={key}><code>{key}</code></li>)}</ul>
-                {schema.note && <p>{schema.note}</p>}
-              </details>
+              {schema.note && <p className="phase3-source-note">{schema.note}</p>}
             </article>
           ))}
         </div>
-        <p className="phase3-schema-footnote">Schema overview only. The editor below still browses the existing source-level records; normalized entities are not individually editable here.</p>
+        <p className="phase3-schema-footnote">Schema view: the five normalized Phase 3 tables/collections for each source. MongoDB references are logical ObjectId links; SQL sources use enforced foreign keys.</p>
+        <div className="phase3-browser-note"><strong>Record browser below:</strong> this is the existing source-level/legacy record view. It does not display or edit the 25 normalized Phase 3 tables shown above.</div>
       </section>
 
       {/* Source tabs */}

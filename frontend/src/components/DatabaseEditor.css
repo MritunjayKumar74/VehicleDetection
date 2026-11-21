@@ -389,3 +389,69 @@
     flex-wrap: nowrap;
   }
 }
+
+
+/* Explicit PK/FK detail for each normalized Phase 3 entity. */
+.phase3-entity {
+  display: grid;
+  align-items: stretch;
+  gap: 4px;
+  min-height: auto;
+  margin: 5px 0;
+  padding: 8px;
+  border: 1px solid #e8edf5;
+  border-radius: 8px;
+  background: #fbfcfe;
+}
+.phase3-entity-name {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #172033;
+  font-weight: 800;
+}
+.phase3-keyline {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding-left: 15px;
+  color: #475569;
+  line-height: 1.4;
+}
+.phase3-key-badge {
+  flex: 0 0 24px;
+  padding: 1px 3px;
+  border-radius: 4px;
+  background: #e0f2fe;
+  color: #0369a1;
+  font-size: 8px;
+  font-weight: 800;
+  text-align: center;
+}
+.phase3-pk-badge {
+  background: #dcfce7;
+  color: #15803d;
+}
+.phase3-entity-name code,
+.phase3-keyline code {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.phase3-source-note {
+  margin: 8px 0 0;
+  padding-top: 8px;
+  border-top: 1px solid #eef2f7;
+  color: #64748b;
+  font-size: 10px;
+  line-height: 1.45;
+}
+.phase3-browser-note {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-left: 3px solid #f59e0b;
+  border-radius: 6px;
+  background: #fffbeb;
+  color: #78350f;
+  font-size: 11px;
+  line-height: 1.5;
+}
