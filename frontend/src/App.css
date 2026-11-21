@@ -975,3 +975,35 @@ body {
     padding: 24px 18px;
   }
 }
+
+.context-unsupported-clues {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+}
+
+.context-unsupported-clues span {
+  padding: 0.35rem 0.6rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+}
+
+.context-match-score {
+  display: inline-block;
+  font-weight: 700;
+  margin-right: 0.5rem;
+}
+
+.context-unmatched-clues {
+  margin-top: 1rem;
+}
+
+.context-unmatched-clues h4 {
+  margin-bottom: 0.5rem;
+}
+
+.context-result-clue-unmatched {
+  opacity: 0.8;
+}
