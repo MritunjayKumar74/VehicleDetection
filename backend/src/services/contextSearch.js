@@ -1,6 +1,7 @@
 const { getCameraDb, getTheftDb } = require('../connectors/mongo')
 const { insurancePool, motPool } = require('../connectors/postgres')
 const { getRtoPool } = require('../connectors/mysql')
+const { parseContextSentence } = require('./contextQueryParser')
 
 const SOURCE_NAMES = [
   'DB1_CameraSightings',
@@ -15,26 +16,6 @@ const MAX_RECORDS_PER_SOURCE_PER_PLATE = 3
 
 function normalizePlate(value) {
   return String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '')
-}
-
-function cleanFilters(input = {}) {
-  const allowed = ['location', 'make', 'model', 'color', 'vehicleType']
-  const filters = {}
-  for (const field of allowed) {
-    const value = String(input[field] || '').trim()
-    if (value) filters[field] = value
-  }
-  if (!Object.keys(filters).length) {
-    const error = new Error('Enter at least one context clue: location, make, model, color, or vehicle type.')
-    error.status = 400
-    throw error
-  }
-  if (Object.values(filters).some(value => value.length < 2 || value.length > 100)) {
-    const error = new Error('Each context clue must be between 2 and 100 characters.')
-    error.status = 400
-    throw error
-  }
-  return filters
 }
 
 function textMatches(value, clue) {
@@ -175,8 +156,9 @@ async function loadSources() {
   ]
 }
 
-async function searchVehiclesByContext(input) {
-  const filters = cleanFilters(input)
+async function searchVehiclesByContext(query) {
+  const parsed = parseContextSentence(query)
+  const filters = parsed.filters
   const definitions = await loadSources()
   const settled = await Promise.allSettled(definitions.map(definition => definition.load()))
   const groups = new Map()
@@ -217,6 +199,8 @@ async function searchVehiclesByContext(input) {
   }).sort((left, right) => right.sources.length - left.sources.length || left.plate.localeCompare(right.plate))
 
   return {
+    query: parsed.sentence,
+    parsedFilters: filters,
     filters,
     matchRule: 'Every entered clue must match at least one structured value for the same normalized plate. Text clues use case-insensitive partial matching.',
     sourceStatus,

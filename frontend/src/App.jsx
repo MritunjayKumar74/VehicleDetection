@@ -32,7 +32,7 @@ function App() {
   const [color, setColor] = useState('')
   const [algorithm, setAlgorithm] = useState(null)
   const [activePage, setActivePage] = useState('dashboard')
-  const [contextFilters, setContextFilters] = useState({ location: '', make: '', model: '', color: '', vehicleType: '' })
+  const [contextQuery, setContextQuery] = useState('')
   const [contextSearchResult, setContextSearchResult] = useState(null)
   const [contextSearchError, setContextSearchError] = useState(null)
   const [contextSearchLoading, setContextSearchLoading] = useState(false)
@@ -83,11 +83,9 @@ function App() {
 
   const handleContextSearch = async (e) => {
     e.preventDefault()
-    const filters = Object.fromEntries(
-      Object.entries(contextFilters).map(([key, value]) => [key, value.trim()]).filter(([, value]) => value)
-    )
-    if (!Object.keys(filters).length) {
-      setContextSearchError('Enter at least one context clue to search.')
+    const sentence = contextQuery.trim()
+    if (!sentence) {
+      setContextSearchError('Describe the vehicles you want to find.')
       setContextSearchResult(null)
       return
     }
@@ -96,8 +94,11 @@ function App() {
     setContextSearchError(null)
     setContextSearchResult(null)
     try {
-      const query = new URLSearchParams(filters)
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/vehicle/context-search?${query.toString()}`)
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/vehicle/context-search`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: sentence }),
+      })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || 'Context search failed')
       setContextSearchResult(data)
@@ -174,6 +175,14 @@ function App() {
           </button>
 
           <button
+            className={`sidebar-item ${activePage === 'context-search' ? 'active' : ''}`}
+            onClick={() => setActivePage('context-search')}
+          >
+            <i className="fas fa-filter"></i>
+            <span>Context Search</span>
+          </button>
+
+          <button
             className={`sidebar-item ${
               activePage === 'ocr' ? 'active' : ''
             }`}
@@ -234,6 +243,93 @@ function App() {
 
           {activePage === 'sql-console' && <SqlConsole />}
 
+          {activePage === 'context-search' && (
+            <section className="context-search-page" aria-labelledby="context-search-title">
+                <header className="context-search-page-header">
+                  <span className="context-search-eyebrow">NATURAL-LANGUAGE DATABASE SEARCH</span>
+                  <h1 id="context-search-title">Context Search</h1>
+                  <p>Describe the vehicles you are looking for. The search checks connected structured sources and shows the database evidence behind each result.</p>
+                </header>
+                <form className="context-sentence-form" onSubmit={handleContextSearch}>
+                  <label htmlFor="context-sentence">Describe the vehicles you want to find</label>
+                  <textarea
+                    id="context-sentence"
+                    rows="3"
+                    maxLength="300"
+                    placeholder="List all vehicles whose colour is red"
+                    value={contextQuery}
+                    onChange={e => setContextQuery(e.target.value)}
+                    disabled={contextSearchLoading}
+                  />
+                  <div className="context-sentence-actions">
+                    <span>Examples: “Find silver Honda vehicles” · “List red SUVs near Gurugram”</span>
+                    <button type="submit" disabled={contextSearchLoading || !contextQuery.trim()}>
+                      {contextSearchLoading ? 'Searching databases…' : 'Search databases'}
+                    </button>
+                  </div>
+                </form>
+                {contextSearchError && <p className="context-search-error" role="alert">{contextSearchError}</p>}
+                {contextSearchLoading && <p className="context-search-status">Searching linked records across all available sources…</p>}
+                {contextSearchResult && (
+                  <div className="context-search-results">
+                    <div className="context-search-summary">
+                      <strong>{contextSearchResult.totalMatches} matching vehicle{contextSearchResult.totalMatches === 1 ? '' : 's'}</strong>
+                      <span>Sources checked: {contextSearchResult.sourceStatus.filter(source => !source.error).length}/5</span>
+                    </div>
+                    <div className="context-interpreted-query">
+                      <b>Interpreted as:</b>
+                      {Object.entries(contextSearchResult.parsedFilters || {}).map(([field, value]) => (
+                        <span key={field}>{readableFieldName(field)}: {value}</span>
+                      ))}
+                    </div>
+                    <p className="context-match-rule">{contextSearchResult.matchRule}</p>
+                    {contextSearchResult.sourceStatus.some(source => source.error) && (
+                      <p className="context-source-warning">Some sources could not be searched: {contextSearchResult.sourceStatus.filter(source => source.error).map(source => source.source).join(', ')}.</p>
+                    )}
+                    {contextSearchResult.matches.length ? (
+                      <div className="context-result-list">
+                        {contextSearchResult.matches.map(match => (
+                          <article className="context-result-card" key={match.plate}>
+                            <div className="context-result-topline">
+                              <div>
+                                <h3>{match.plate}</h3>
+                                <span>{match.sources.length} source{match.sources.length === 1 ? '' : 's'} contributed records</span>
+                              </div>
+                              <button type="button" onClick={() => { setActivePage('search'); setPlate(match.plate); runSearch(match.plate) }}>Open full vehicle lookup</button>
+                            </div>
+                            <div className="context-result-evidence">
+                              {match.matchedContext.map(item => (
+                                <div className="context-result-clue" key={item.field}>
+                                  <b>{readableFieldName(item.field)} contains “{item.query}”</b>
+                                  <span>{item.evidence.map(evidence => `${evidence.source}: ${evidence.value}`).join(' · ')}</span>
+                                </div>
+                              ))}
+                            </div>
+                            <details className="context-source-records">
+                              <summary>View matching database records ({match.sourceRecords.length})</summary>
+                              <div className="context-source-record-list">
+                                {match.sourceRecords.map((record, index) => (
+                                  <div className="context-source-record" key={`${record.source}-${index}`}>
+                                    <strong>{record.source}</strong>
+                                    <span>{Object.entries(record.fields).filter(([, value]) => value !== null && value !== undefined && value !== '').map(([field, value]) => `${readableFieldName(field)}: ${formatContextValue(value)}`).join(' · ')}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </details>
+                          </article>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="context-search-empty">No vehicle records matched the interpreted context. Try a different sentence or broaden the clues.</p>
+                    )}
+                    {contextSearchResult.totalMatches > contextSearchResult.limit && (
+                      <p className="context-search-status">Showing the first {contextSearchResult.limit} of {contextSearchResult.totalMatches} matches.</p>
+                    )}
+                  </div>
+                )}
+            </section>
+          )}
+
           {activePage === 'search' && (
             <>
 
@@ -276,77 +372,7 @@ function App() {
                 </div>
               </form>
 
-              <section className="context-search-section" aria-labelledby="context-search-title">
-                <div className="context-search-heading">
-                  <div>
-                    <h2 id="context-search-title"><i className="fas fa-filter"></i> Search by vehicle context</h2>
-                    <p>Search connected databases without knowing the plate. Enter one or more clues; every clue must match the same vehicle.</p>
-                  </div>
-                </div>
-                <form className="context-search-form" onSubmit={handleContextSearch}>
-                  <input aria-label="Location clue" placeholder="Location / police station" value={contextFilters.location} onChange={e => setContextFilters(current => ({ ...current, location: e.target.value }))} />
-                  <input aria-label="Vehicle make clue" placeholder="Make (e.g. Honda)" value={contextFilters.make} onChange={e => setContextFilters(current => ({ ...current, make: e.target.value }))} />
-                  <input aria-label="Vehicle model clue" placeholder="Model (e.g. WRV)" value={contextFilters.model} onChange={e => setContextFilters(current => ({ ...current, model: e.target.value }))} />
-                  <input aria-label="Vehicle color clue" placeholder="Color (e.g. Silver)" value={contextFilters.color} onChange={e => setContextFilters(current => ({ ...current, color: e.target.value }))} />
-                  <input aria-label="Vehicle type clue" placeholder="Vehicle type (e.g. Sedan)" value={contextFilters.vehicleType} onChange={e => setContextFilters(current => ({ ...current, vehicleType: e.target.value }))} />
-                  <button type="submit" disabled={contextSearchLoading}>
-                    {contextSearchLoading ? 'Searching databases…' : 'Search by context'}
-                  </button>
-                </form>
-                {contextSearchError && <p className="context-search-error" role="alert">{contextSearchError}</p>}
-                {contextSearchLoading && <p className="context-search-status">Searching structured records across the connected sources…</p>}
-                {contextSearchResult && (
-                  <div className="context-search-results">
-                    <div className="context-search-summary">
-                      <strong>{contextSearchResult.totalMatches} matching vehicle{contextSearchResult.totalMatches === 1 ? '' : 's'}</strong>
-                      <span>Sources checked: {contextSearchResult.sourceStatus.filter(source => !source.error).length}/5</span>
-                    </div>
-                    <p className="context-match-rule">{contextSearchResult.matchRule}</p>
-                    {contextSearchResult.sourceStatus.some(source => source.error) && (
-                      <p className="context-source-warning">Some sources could not be searched: {contextSearchResult.sourceStatus.filter(source => source.error).map(source => source.source).join(', ')}.</p>
-                    )}
-                    {contextSearchResult.matches.length ? (
-                      <div className="context-result-list">
-                        {contextSearchResult.matches.map(match => (
-                          <article className="context-result-card" key={match.plate}>
-                            <div className="context-result-topline">
-                              <div>
-                                <h3>{match.plate}</h3>
-                                <span>{match.sources.length} source{match.sources.length === 1 ? '' : 's'} contributed records</span>
-                              </div>
-                              <button type="button" onClick={() => { setPlate(match.plate); runSearch(match.plate) }}>Open full vehicle lookup</button>
-                            </div>
-                            <div className="context-result-evidence">
-                              {match.matchedContext.map(item => (
-                                <div className="context-result-clue" key={item.field}>
-                                  <b>{readableFieldName(item.field)} contains “{item.query}”</b>
-                                  <span>{item.evidence.map(evidence => `${evidence.source}: ${evidence.value}`).join(' · ')}</span>
-                                </div>
-                              ))}
-                            </div>
-                            <details className="context-source-records">
-                              <summary>View matching database records ({match.sourceRecords.length})</summary>
-                              <div className="context-source-record-list">
-                                {match.sourceRecords.map((record, index) => (
-                                  <div className="context-source-record" key={`${record.source}-${index}`}>
-                                    <strong>{record.source}</strong>
-                                    <span>{Object.entries(record.fields).filter(([, value]) => value !== null && value !== undefined && value !== '').map(([field, value]) => `${readableFieldName(field)}: ${formatContextValue(value)}`).join(' · ')}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            </details>
-                          </article>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="context-search-empty">No vehicle records matched every entered clue. Try fewer or broader clues.</p>
-                    )}
-                    {contextSearchResult.totalMatches > contextSearchResult.limit && (
-                      <p className="context-search-status">Showing the first {contextSearchResult.limit} of {contextSearchResult.totalMatches} matches.</p>
-                    )}
-                  </div>
-                )}
-              </section>
+
 
               {algorithm && (
                 <details className="ocr-algorithm">

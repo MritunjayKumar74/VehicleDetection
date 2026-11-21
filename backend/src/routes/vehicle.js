@@ -58,15 +58,9 @@ router.get('/matches', async (req, res) => {
   }
 })
 
-router.get('/context-search', async (req, res) => {
+router.post('/context-search', async (req, res) => {
   try {
-    const result = await searchVehiclesByContext({
-      location: req.query.location,
-      make: req.query.make,
-      model: req.query.model,
-      color: req.query.color,
-      vehicleType: req.query.vehicleType,
-    })
+    const result = await searchVehiclesByContext(req.body?.query)
     res.json(result)
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message || 'Context search failed' })
