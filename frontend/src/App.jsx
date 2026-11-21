@@ -279,9 +279,19 @@ function App() {
                     <div className="context-interpreted-query">
                       <b>Interpreted as:</b>
                       {Object.entries(contextSearchResult.parsedFilters || {}).map(([field, value]) => (
-                        <span key={field}>{readableFieldName(field)}: {value}</span>
+                        <span key={field}>✓ {readableFieldName(field)}: {value}</span>
                       ))}
                     </div>
+
+                    {contextSearchResult.unsupportedClues?.length > 0 && (
+                      <div className="context-unsupported-clues">
+                        <b>Could not interpret:</b>
+                        {contextSearchResult.unsupportedClues.map((clue, index) => (
+                          <span key={index}>⚠ {clue}</span>
+                        ))}
+                      </div>
+                    )}
+
                     <p className="context-match-rule">{contextSearchResult.matchRule}</p>
                     {contextSearchResult.sourceStatus.some(source => source.error) && (
                       <p className="context-source-warning">Some sources could not be searched: {contextSearchResult.sourceStatus.filter(source => source.error).map(source => source.source).join(', ')}.</p>
@@ -293,18 +303,61 @@ function App() {
                             <div className="context-result-topline">
                               <div>
                                 <h3>{match.plate}</h3>
-                                <span>{match.sources.length} source{match.sources.length === 1 ? '' : 's'} contributed records</span>
+                                <span className="context-match-score">
+                                  {match.matchScore}% clue match
+                                </span>
+                                <span>
+                                  {match.matchedCount}/{match.totalClues} supported clues matched · {match.sources.length} source{match.sources.length === 1 ? '' : 's'} contributed records
+                                </span>
                               </div>
                               <button type="button" onClick={() => { setActivePage('search'); setPlate(match.plate); runSearch(match.plate) }}>Open full vehicle lookup</button>
                             </div>
                             <div className="context-result-evidence">
                               {match.matchedContext.map(item => (
                                 <div className="context-result-clue" key={item.field}>
-                                  <b>{readableFieldName(item.field)} contains “{item.query}”</b>
-                                  <span>{item.evidence.map(evidence => `${evidence.source}: ${evidence.value}`).join(' · ')}</span>
+                                  <b>✓ {readableFieldName(item.field)} matches “{item.query}”</b>
+                                  <span>
+                                    {item.evidence.map(
+                                      evidence => `${evidence.source}: ${evidence.value}`
+                                    ).join(' · ')}
+                                  </span>
                                 </div>
                               ))}
                             </div>
+
+                            {match.unmatchedContext?.length > 0 && (
+                              <div className="context-unmatched-clues">
+                                <h4>Unmatched clues</h4>
+
+                                {match.unmatchedContext.map(item => (
+                                  <div
+                                    className="context-result-clue context-result-clue-unmatched"
+                                    key={item.field}
+                                  >
+                                    <b>
+                                      ✗ {readableFieldName(item.field)} did not match “{item.query}”
+                                    </b>
+
+                                    {item.availableEvidence?.length > 0 ? (
+                                      <span>
+                                        Available values: {
+                                          item.availableEvidence
+                                            .map(
+                                              evidence =>
+                                                `${evidence.source}: ${evidence.value}`
+                                            )
+                                            .join(' · ')
+                                        }
+                                      </span>
+                                    ) : (
+                                      <span>
+                                        No connected source supplied a value for this clue.
+                                      </span>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                             <details className="context-source-records">
                               <summary>View matching database records ({match.sourceRecords.length})</summary>
                               <div className="context-source-record-list">

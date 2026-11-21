@@ -183,26 +183,60 @@ async function searchVehiclesByContext(query) {
   }
 
   const matches = [...groups.values()].flatMap(group => {
-    const matchedContext = Object.entries(filters).map(([field, query]) => ({
-      field,
-      query,
-      evidence: group.values[field].filter(item => textMatches(item.value, query)),
-    }))
-    if (matchedContext.some(item => item.evidence.length === 0)) return []
+    const clueResults = Object.entries(filters).map(([field, query]) => {
+      const availableEvidence = group.values[field] || []
+
+      const evidence = availableEvidence.filter(item =>
+        textMatches(item.value, query)
+      )
+
+      return {
+        field,
+        query,
+        matched: evidence.length > 0,
+        evidence,
+        availableEvidence: availableEvidence.slice(0, 5),
+      }
+    })
+
+    const matchedContext = clueResults.filter(item => item.matched)
+    const unmatchedContext = clueResults.filter(item => !item.matched)
+
+    const matchedCount = matchedContext.length
+    const totalClues = clueResults.length
+
+    if (matchedCount === 0) return []
+
+    const matchScore = Math.round(
+      (matchedCount / totalClues) * 100
+    )
 
     return [{
       plate: group.plate,
       sourceRecords: group.sourceRecords,
       sources: [...new Set(group.sourceRecords.map(record => record.source))],
+
       matchedContext,
+      unmatchedContext,
+
+      matchedCount,
+      totalClues,
+      matchScore,
     }]
-  }).sort((left, right) => right.sources.length - left.sources.length || left.plate.localeCompare(right.plate))
+  }).sort((left, right) =>
+    right.matchScore - left.matchScore ||
+    right.matchedCount - left.matchedCount ||
+    right.sources.length - left.sources.length ||
+    left.plate.localeCompare(right.plate)
+  )
 
   return {
     query: parsed.sentence,
     parsedFilters: filters,
+    annotations: parsed.annotations || [],
+    unsupportedClues: parsed.unsupportedClues || [],
     filters,
-    matchRule: 'Every entered clue must match at least one structured value for the same normalized plate. Text clues use case-insensitive partial matching.',
+    matchRule: 'Results are ranked by the percentage of supported query clues matched across the federated structured sources.',
     sourceStatus,
     totalMatches: matches.length,
     matches: matches.slice(0, MAX_RESULTS),

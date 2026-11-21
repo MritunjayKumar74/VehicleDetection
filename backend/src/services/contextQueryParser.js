@@ -1,5 +1,5 @@
 const COLORS = ['silver', 'white', 'black', 'red', 'blue', 'grey', 'gray', 'brown', 'green', 'yellow']
-const MAKES = ['Maruti Suzuki', 'Hyundai', 'Mahindra', 'Volkswagen', 'Mercedes-Benz', 'New India Assurance', 'Honda', 'Toyota', 'Tata', 'Kia', 'Renault', 'Skoda', 'BMW', 'Audi', 'Ford', 'Nissan', 'Suzuki']
+const MAKES = ['Maruti Suzuki', 'Hyundai', 'Mahindra', 'Volkswagen', 'Mercedes-Benz', 'Honda', 'Toyota', 'Tata', 'Kia', 'Renault', 'Skoda', 'BMW', 'Audi', 'Ford', 'Nissan', 'Suzuki']
 const MODELS = [
   'Baleno', 'Brezza', 'Swift', 'Alto', 'Creta', 'i20', 'Verna', 'Venue',
   'Nexon', 'Harrier', 'Punch', 'Altroz', 'City', 'Amaze', 'WRV',
@@ -32,6 +32,55 @@ function extractLocation(sentence) {
   if (!match) return null
   const value = match[1].split(STOP_WORDS)[0].trim().replace(/[.,!?;:]+$/, '')
   return value.length >= 2 ? value : null
+}
+
+
+function findUnsupportedClues(sentence, filters) {
+  let remaining = sentence.toLowerCase()
+
+  for (const value of Object.values(filters)) {
+    if (!value) continue
+
+    const escaped = String(value)
+      .toLowerCase()
+      .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+    remaining = remaining.replace(
+      new RegExp(`\\b${escaped}(?:s|es)?\\b`, 'gi'),
+      ' '
+    )
+  }
+
+  const fillerWords = [
+    'show', 'find', 'list', 'display', 'return', 'give',
+    'me', 'please', 'all', 'only',
+    'vehicle', 'vehicles', 'car', 'cars',
+    'whose', 'which', 'that', 'with', 'having', 'where',
+    'and', 'or', 'the', 'a', 'an',
+    'is', 'are', 'was', 'were',
+    'equals', 'equal', 'to', 'of',
+    'colour', 'color', 'make', 'manufacturer',
+    'model', 'type',
+    'near', 'at', 'around', 'in',
+    'seen', 'sighted', 'detected',
+    'made', 'by', 'for'
+  ]
+
+  for (const word of fillerWords) {
+    const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+    remaining = remaining.replace(
+      new RegExp(`\\b${escaped}\\b`, 'gi'),
+      ' '
+    )
+  }
+
+  remaining = remaining
+    .replace(/[.,!?;:=()[\]{}"']/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  return remaining ? [remaining] : []
 }
 
 function parseContextSentence(input) {
@@ -71,7 +120,19 @@ function parseContextSentence(input) {
     throw error
   }
 
-  return { sentence, filters }
+  const annotations = Object.entries(filters).map(([field, value]) => ({
+    field,
+    value,
+  }))
+
+  const unsupportedClues = findUnsupportedClues(sentence, filters)
+
+  return {
+    sentence,
+    filters,
+    annotations,
+    unsupportedClues,
+  }
 }
 
 module.exports = { parseContextSentence }
