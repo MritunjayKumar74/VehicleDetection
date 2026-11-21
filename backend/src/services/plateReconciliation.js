@@ -7,6 +7,7 @@ const { SOURCE_NAMES, normalizePlate, findPlateCandidates } = require('./plateMa
 
 const CAMERA_SCHEMA = require('../models/CameraSighting').schema
 const TheftRecord = require('../models/TheftRecord')
+const phase3MongoSchemas = require('../models/phase3MongoSchemas')
 
 async function reconcileNoisyPlate({ recordedPlate, canonicalPlate, sources }) {
   const oldKey = normalizePlate(recordedPlate)
@@ -54,6 +55,17 @@ async function reconcileNoisyPlate({ recordedPlate, canonicalPlate, sources }) {
           )
           updated = result.modifiedCount ?? result.nModified ?? 0
         }
+        // Keep Phase 3 canonical plate entities aligned with Phase 2 corrections.
+        const p3ModelName = source === 'DB1_CameraSightings' ? 'P3ObservedVehicle' : 'P3ReportedVehicle'
+        const p3Schema = source === 'DB1_CameraSightings'
+          ? phase3MongoSchemas.ObservedVehicleSchema
+          : phase3MongoSchemas.ReportedVehicleSchema
+        const P3Vehicle = connection.models[p3ModelName] || connection.model(p3ModelName, p3Schema)
+        const p3Result = await P3Vehicle.updateMany(
+          { plate_normalized: oldKey },
+          { $set: { plate_normalized: newKey, plate_raw: newKey } }
+        )
+        updated += p3Result.modifiedCount ?? p3Result.nModified ?? 0
       } else {
         const isPostgres = source === 'DB2_InsuranceRecords' || source === 'DB5_MotReports'
         const pool = source === 'DB2_InsuranceRecords'
@@ -78,6 +90,26 @@ async function reconcileNoisyPlate({ recordedPlate, canonicalPlate, sources }) {
             await pool.query(`UPDATE ${table} SET ${plateField} = ? WHERE id = ?`, [newKey, row.id])
           }
           updated += 1
+        }
+        // The flat tables remain for Phase 2 compatibility; also update the Phase 3 plate entity.
+        if (source === 'DB2_InsuranceRecords') {
+          const result = await insurancePool.query(
+            "UPDATE insurance_policies SET reg_no = $1 WHERE regexp_replace(upper(reg_no), '[^A-Z0-9]', '', 'g') = $2",
+            [newKey, oldKey]
+          )
+          updated += result.rowCount
+        } else if (source === 'DB3_VehicleRegistration') {
+          const [result] = await getRtoPool().query(
+            "UPDATE rto_registrations SET vehicle_reg_number = ? WHERE REGEXP_REPLACE(UPPER(vehicle_reg_number), '[^A-Z0-9]', '') = ?",
+            [newKey, oldKey]
+          )
+          updated += result.affectedRows
+        } else {
+          const result = await motPool.query(
+            "UPDATE mot_vehicles SET vehicle_number = $1 WHERE regexp_replace(upper(vehicle_number), '[^A-Z0-9]', '', 'g') = $2",
+            [newKey, oldKey]
+          )
+          updated += result.rowCount
         }
       }
       results.push({ source, matched, updated })

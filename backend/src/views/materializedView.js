@@ -12,6 +12,8 @@ async function getOrRefresh(plate, { forceRefresh = false } = {}) {
   if (existing && !existing.is_stale && !forceRefresh) {
     return {
       profile:      existing.profile,
+      context:      existing.context || null,
+      unstructuredSearch: existing.unstructuredSearch || null,
       meta: {
         served_from:   'materialized_view',
         last_refreshed: existing.last_refreshed,
@@ -23,13 +25,15 @@ async function getOrRefresh(plate, { forceRefresh = false } = {}) {
   }
 
   // MISS or STALE — run federated query and update view
-  const { profile, meta } = await federatedLookup(plate)
+  const { profile, context, unstructuredSearch, meta } = await federatedLookup(plate)
 
   await VehicleSnapshot.findOneAndUpdate(
     { plate },
     {
       plate,
       profile,
+      context,
+      unstructuredSearch,
       overall_status:   profile.overall_status,
       is_stale:         false,
       stale_reason:     null,
@@ -42,6 +46,8 @@ async function getOrRefresh(plate, { forceRefresh = false } = {}) {
 
   return {
     profile,
+    context,
+    unstructuredSearch,
     meta: {
       served_from:    existing ? 'federated_refresh' : 'federated_new',
       last_refreshed: new Date(),

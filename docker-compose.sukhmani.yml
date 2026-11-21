@@ -1,0 +1,79 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: vehicle_postgres
+    ports:
+      - "5434:5432"
+    environment:
+      POSTGRES_USER: iia
+      POSTGRES_PASSWORD: iia123
+      POSTGRES_DB: insurancedb
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    logging:
+      driver: "none"
+
+  postgres_mot:
+    image: postgres:16
+    container_name: vehicle_postgres_mot
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: iia
+      POSTGRES_PASSWORD: iia123
+      POSTGRES_DB: motdb
+    volumes:
+      - pg_mot_data:/var/lib/postgresql/data
+    logging:
+      driver: "none"
+
+  backend:
+    build: ./backend
+    container_name: vehicle_backend
+    ports:
+      - "0.0.0.0:5001:5000"
+    environment:
+      - PORT=5000
+
+      # DB1 Camera + DB4 Theft: Sourabh's MongoDB over Tailscale
+      - MONGO_URI=mongodb://${SOURABH_TAILSCALE_IP}:27017
+
+      # DB2 Insurance: local PostgreSQL on Sukhmani's Docker network
+      - PG_INSURANCE_HOST=postgres
+      - PG_INSURANCE_PORT=5432
+      - PG_INSURANCE_USER=iia
+      - PG_INSURANCE_PASSWORD=iia123
+      - PG_INSURANCE_DB=insurancedb
+
+      # DB3 RTO: Mritunjay's MySQL over Tailscale
+      - MYSQL_HOST=${MRITUNJAY_TAILSCALE_IP}
+      - MYSQL_PORT=3306
+      - MYSQL_USER=iia
+      - MYSQL_PASSWORD=iia123
+      - MYSQL_DB=rtodb
+
+      # DB5 MOT: local PostgreSQL on Sukhmani's Docker network
+      - PG_MOT_HOST=postgres_mot
+      - PG_MOT_PORT=5432
+      - PG_MOT_USER=iia
+      - PG_MOT_PASSWORD=iia123
+      - PG_MOT_DB=motdb
+    depends_on:
+      postgres:
+        condition: service_started
+      postgres_mot:
+        condition: service_started
+
+  frontend:
+    build: ./frontend
+    container_name: vehicle_frontend
+    ports:
+      - "0.0.0.0:3001:3000"
+    environment:
+      - VITE_API_URL=http://localhost:5001
+    depends_on:
+      - backend
+
+volumes:
+  pg_data:
+  pg_mot_data:
